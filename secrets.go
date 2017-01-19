@@ -62,3 +62,8 @@ type Secrets interface {
 		encryptedData string,
 	) (string, error)
 }
+
+type SecretBackendInit func(
+	name string,
+	secretConfig map[string]string,
+) (Secrets, error)
