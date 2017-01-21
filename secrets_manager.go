@@ -7,7 +7,7 @@ import (
 
 var (
 	instance       Secrets
-	secretBackends = make(map[string]SecretBackendInit)
+	secretBackends = make(map[string]BackendInit)
 	lock           sync.RWMutex
 )
 
@@ -33,24 +33,28 @@ func SetInstance(secrets Secrets) error {
 // New returns a new instance of Secrets backend KMS identified by
 // the supplied name. SecretConfig is a map of key value pairs which could
 // be used for authenticating with the backedn
-func New(name string, secretConfig map[string]string) (Secrets, error) {
+func New(
+	name string,
+	endpoint string,
+	secretConfig map[string]string,
+) (Secrets, error) {
 	lock.RLock()
 	defer lock.RUnlock()
 
-	if dsInit, exists := secretBackends[name]; exists {
-		return dsInit(name, secretConfig)
+	if bInit, exists := secretBackends[name]; exists {
+		return bInit(endpoint, secretConfig)
 	}
 	return nil, ErrNotSupported
 }
 
 // Register adds a new backend KMS
-func Register(name string, dsInit SecretBackendInit) error {
+func Register(name string, bInit BackendInit) error {
 	lock.Lock()
 	defer lock.Unlock()
 	if _, exists := secretBackends[name]; exists {
 		return fmt.Errorf("Secrets Backend provider %v is already"+
 			" registered", name)
 	}
-	secretBackends[name] = dsInit
+	secretBackends[name] = bInit
 	return nil
 }
