@@ -2,7 +2,6 @@ package secrets
 
 import (
 	"errors"
-	"github.com/Sirupsen/logrus"
 )
 
 var (
@@ -15,20 +14,20 @@ type Secrets interface {
 	// String representation of the backend KMS
 	String() string
 
-	// GetKey returns the plain text version of the supplied encrypted key.
-	// The plain text key   can be used by callers to encrypt their data.
-	// It is assumed that the plain text key will be destroyed by the
-	// caller once used.
+	// GetKey returns the plain text data associated with the
+	// supplied encrypted key Id. The plain text version of the key can be used
+	// by callers to encrypt their data. It is assumed that the plain text
+	// data will be destroyed by the caller once used.
 	GetKey(
 		encryptedKeyId string,
 		keyContext map[string]string,
-	) (string, error)
+	) (map[string]interface{}, error)
 
-	// PutKey will write a new key pair of <encryped_key, plaintext_key>
-	// into the backend KMS.
+	// PutKey will associate an encrypted key Id to its plain text data
+	// provided in the arguments and store it into the backend KMS
 	PutKey(
-		encryptedKey string,
-		plainTextKey string,
+		encryptedKeyId string,
+		plainText map[string]interface{},
 		keyContext map[string]string,
 	) error
 
@@ -63,7 +62,7 @@ type Secrets interface {
 	) (string, error)
 }
 
-type SecretBackendInit func(
-	name string,
+type BackendInit func(
+	endpoint string,
 	secretConfig map[string]string,
 ) (Secrets, error)
