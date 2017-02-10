@@ -6,7 +6,7 @@ import (
 	"github.com/libopenstorage/secrets"
 )
 
-func Run(secretBackendInit secrets.BackendInit, secretConfig map[string]string, t *testing.T) {
+func Run(secretBackendInit secrets.BackendInit, secretConfig map[string]interface{}, t *testing.T) {
 	secret, err := secretBackendInit("", secretConfig)
 	if err != nil {
 		t.Fatalf("Unable to initialize secret backend: %v", err)

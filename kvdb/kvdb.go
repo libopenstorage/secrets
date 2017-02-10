@@ -3,7 +3,6 @@ package kvdb
 import (
 	"errors"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/libopenstorage/secrets"
 	kv "github.com/portworx/kvdb"
 )
