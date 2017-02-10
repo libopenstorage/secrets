@@ -7,7 +7,7 @@ import (
 )
 
 func TestAll(t *testing.T) {
-	config := make(map[string]string)
+	config := make(map[string]interface{})
 	config[ReadEnvironment] = ""
 	test.Run(New, config, t)
 }
