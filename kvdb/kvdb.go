@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	Name    = "kvdb"
-	KvdbKey = "KVDB"
+	Name      = "kvdb"
+	KvdbKey   = "KVDB"
+	SecretKey = "secret/"
 )
 
 var (
@@ -40,24 +41,24 @@ func (v *kvdbSecrets) String() string {
 	return Name
 }
 
-func (v *kvdbSecrets) GetKey(
-	encryptedKeyId string,
+func (v *kvdbSecrets) GetSecret(
+	secretId string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
 	var secretData map[string]interface{}
-	_, err := v.client.GetVal("secret/" + encryptedKeyId, &secretData)
+	_, err := v.client.GetVal(SecretKey+secretId, &secretData)
 	if err != nil {
 		return nil, err
 	}
 	return secretData, nil
 }
 
-func (v *kvdbSecrets) PutKey(
-	encryptedKeyId string,
+func (v *kvdbSecrets) PutSecret(
+	secretId string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) error {
-	_, err := v.client.Put("secret/"+encryptedKeyId, &secretData, 0)
+	_, err := v.client.Put(SecretKey+secretId, &secretData, 0)
 	return err
 }
 

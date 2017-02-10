@@ -10,9 +10,11 @@ import (
 )
 
 const (
-	Name            = "hashicorp-vault"
+	Name               = "hashicorp-vault"
 	ReadEnvironmentKey = "READ_ENVIRONMENT"
 	VaultTokenKey      = "VAULT_TOKEN"
+	defaultEndpoint    = "http://127.0.0.1:8200"
+	SecretKey          = "secret/"
 )
 
 var (
@@ -20,13 +22,15 @@ var (
 	ErrInvalidVaultToken = errors.New("VAULT_TOKEN is invalid")
 )
 
-var (
-	defaultEndpoint = "http://127.0.0.1:8200"
-)
+var ()
 
 type vaultSecrets struct {
 	client   *api.Client
 	endpoint string
+}
+
+func getSecretKey(secretId string) string {
+	return SecretKey + secretId
 }
 
 func New(
@@ -79,28 +83,28 @@ func (v *vaultSecrets) String() string {
 	return Name
 }
 
-func (v *vaultSecrets) GetKey(
-	encryptedKeyId string,
+func (v *vaultSecrets) GetSecret(
+	secretId string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	secret, err := v.client.Logical().Read("secret/" + encryptedKeyId)
+	secret, err := v.client.Logical().Read(getSecretKey(secretId) + encryptedKeyId)
 	if err != nil {
 		return nil, err
 	}
 	return secret.Data, nil
 }
 
-func (v *vaultSecrets) PutKey(
-	encryptedKeyId string,
+func (v *vaultSecrets) PutSecret(
+	secretId string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) error {
-	_, err := v.client.Logical().Write("secret/"+encryptedKeyId, secretData)
+	_, err := v.client.Logical().Write(getSecretKey(secretId), secretData)
 	return err
 }
 
 func (v *vaultSecrets) Encrypt(
-	encryptedKeyId string,
+	secretId string,
 	plaintTextData string,
 	keyContext map[string]string,
 ) (string, error) {
@@ -108,7 +112,7 @@ func (v *vaultSecrets) Encrypt(
 }
 
 func (v *vaultSecrets) Decrypt(
-	encryptedKeyId string,
+	secretId string,
 	encryptedData string,
 	keyContext map[string]string,
 ) (string, error) {
@@ -116,8 +120,8 @@ func (v *vaultSecrets) Decrypt(
 }
 
 func (v *vaultSecrets) Rencrypt(
-	originalEncryptedKeyId string,
-	newEncryptedKeyId string,
+	originalSecretId string,
+	newSecretId string,
 	originalKeyContext map[string]string,
 	newKeyContext map[string]string,
 	encryptedData string,

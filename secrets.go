@@ -14,19 +14,19 @@ type Secrets interface {
 	// String representation of the backend KMS
 	String() string
 
-	// GetKey returns the secret data associated with the
-	// supplied encrypted key Id. The secret data /plain text version of the key can be used
+	// GetSecret returns the secret data associated with the
+	// supplied secretId. The secret data / plain text  can be used
 	// by callers to encrypt their data. It is assumed that the plain text
 	// data will be destroyed by the caller once used.
-	GetKey(
-		encryptedKeyId string,
+	GetSecret(
+		secretId string,
 		keyContext map[string]string,
 	) (map[string]interface{}, error)
 
-	// PutKey will associate an encrypted key Id to its secret data
-	// provided in the arguments and store it into the backend KMS
-	PutKey(
-		encryptedKeyId string,
+	// PutSecret will associate an secretId to its secret data
+	// provided in the arguments and store it into the secret backend
+	PutSecret(
+		secretId string,
 		plainText map[string]interface{},
 		keyContext map[string]string,
 	) error
@@ -36,7 +36,7 @@ type Secrets interface {
 	// The plain text key will not be stored anywhere else and would be
 	// deleted from memory.
 	Encrypt(
-		encryptedKeyId string,
+		secretId string,
 		plaintTextData string,
 		keyContext map[string]string,
 	) (string, error)
@@ -46,7 +46,7 @@ type Secrets interface {
 	// The plain text key will not be stored anywhere else and would be
 	// deleted from memory.
 	Decrypt(
-		encryptedKeyId string,
+		secretId string,
 		encryptedData string,
 		keyContext map[string]string,
 	) (string, error)
@@ -54,8 +54,8 @@ type Secrets interface {
 	// Reencrypt decrypts the data with the previous key and re-encrypts it
 	// with the new key..
 	Rencrypt(
-		originalEncryptedKeyId string,
-		newEncryptedKeyId string,
+		originalSecretId string,
+		newSecretId string,
 		originalKeyContext map[string]string,
 		newKeyContext map[string]string,
 		encryptedData string,

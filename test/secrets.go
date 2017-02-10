@@ -23,12 +23,12 @@ func getPutKey(s secrets.Secrets, t *testing.T) {
 	if s == nil {
 		t.Fatalf("secrets is nil")
 	}
-	err := s.PutKey(keyId, data, nil)
+	err := s.PutSecret(keyId, data, nil)
 	if err != nil {
 		t.Fatalf("Unable to put key into secrets: %v", err)
 	}
 
-	plainText, err := s.GetKey(keyId, nil)
+	plainText, err := s.GetSecret(keyId, nil)
 	if err != nil {
 		t.Fatalf("Unable to get key from secrets: %v", err)
 	}
