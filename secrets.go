@@ -14,8 +14,8 @@ type Secrets interface {
 	// String representation of the backend KMS
 	String() string
 
-	// GetKey returns the plain text data associated with the
-	// supplied encrypted key Id. The plain text version of the key can be used
+	// GetKey returns the secret data associated with the
+	// supplied encrypted key Id. The secret data /plain text version of the key can be used
 	// by callers to encrypt their data. It is assumed that the plain text
 	// data will be destroyed by the caller once used.
 	GetKey(
@@ -23,7 +23,7 @@ type Secrets interface {
 		keyContext map[string]string,
 	) (map[string]interface{}, error)
 
-	// PutKey will associate an encrypted key Id to its plain text data
+	// PutKey will associate an encrypted key Id to its secret data
 	// provided in the arguments and store it into the backend KMS
 	PutKey(
 		encryptedKeyId string,
@@ -64,5 +64,5 @@ type Secrets interface {
 
 type BackendInit func(
 	endpoint string,
-	secretConfig map[string]string,
+	secretConfig map[string]interface{},
 ) (Secrets, error)

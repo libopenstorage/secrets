@@ -32,11 +32,11 @@ func SetInstance(secrets Secrets) error {
 
 // New returns a new instance of Secrets backend KMS identified by
 // the supplied name. SecretConfig is a map of key value pairs which could
-// be used for authenticating with the backedn
+// be used for authenticating with the backend
 func New(
 	name string,
 	endpoint string,
-	secretConfig map[string]string,
+	secretConfig map[string]interface{},
 ) (Secrets, error) {
 	lock.RLock()
 	defer lock.RUnlock()
