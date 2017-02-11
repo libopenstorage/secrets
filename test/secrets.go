@@ -7,7 +7,7 @@ import (
 )
 
 func Run(secretBackendInit secrets.BackendInit, secretConfig map[string]interface{}, t *testing.T) {
-	secret, err := secretBackendInit("", secretConfig)
+	secret, err := secretBackendInit(secretConfig)
 	if err != nil {
 		t.Fatalf("Unable to initialize secret backend: %v", err)
 	}
@@ -39,5 +39,9 @@ func getPutKey(s secrets.Secrets, t *testing.T) {
 		if o, exists := data[k]; !exists || o != v {
 			t.Errorf("Put and Get values do not match")
 		}
+	}
+	_, err = s.GetSecret("unknown_key", nil)
+	if err == nil {
+		t.Fatalf("Expected error when no secret key present")
 	}
 }

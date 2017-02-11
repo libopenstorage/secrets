@@ -63,6 +63,5 @@ type Secrets interface {
 }
 
 type BackendInit func(
-	endpoint string,
 	secretConfig map[string]interface{},
 ) (Secrets, error)

@@ -13,13 +13,16 @@ const (
 	Name               = "hashicorp-vault"
 	ReadEnvironmentKey = "READ_ENVIRONMENT"
 	VaultTokenKey      = "VAULT_TOKEN"
+	VaultAddressKey    = "VAULT_ADDR"
 	defaultEndpoint    = "http://127.0.0.1:8200"
 	SecretKey          = "secret/"
 )
 
 var (
-	ErrVaultTokenNotSet  = errors.New("VAULT_TOKEN not set.")
-	ErrInvalidVaultToken = errors.New("VAULT_TOKEN is invalid")
+	ErrVaultTokenNotSet   = errors.New("VAULT_TOKEN not set.")
+	ErrVaultAddressNotSet = errors.New("VAULT_ADDR not set.")
+	ErrInvalidVaultToken  = errors.New("VAULT_TOKEN is invalid")
+	ErrInvalidSecretId = errors.New("No Secret Data found for Secret Id")
 )
 
 var ()
@@ -33,50 +36,66 @@ func getSecretKey(secretId string) string {
 	return SecretKey + secretId
 }
 
-func New(
-	endpoint string,
-	secretConfig map[string]interface{},
-) (secrets.Secrets, error) {
-
-	config := api.DefaultConfig()
-	if endpoint != "" {
-		config.Address = endpoint
+func getVaultParam(secretConfig map[string]interface{}, paramName string) string {
+	// Set the token for the Vault Client
+	var token string
+	if tokenIntf, exists := secretConfig[paramName]; exists {
+		token := tokenIntf.(string)
+		return token
 	}
-
-	// If ReadEnvironmentKey specified override the
-	// default config.
-	if _, exists := secretConfig[ReadEnvironmentKey]; exists {
-		err := config.ReadEnvironment()
-		if err != nil {
-			return nil, err
-		}
+	token, exists := os.LookupEnv(VaultTokenKey)
+	if !exists {
+		return ""
 	}
+	return token
+}
 
+func getVaultClient(config *api.Config) (*api.Client, error) {
 	client, err := api.NewClient(config)
 	if err != nil {
 		logrus.Errorf("Failed to get new client")
 		return nil, err
 	}
-	// Set the token for the Vault Client
-	if tokenIntf, exists := secretConfig[VaultTokenKey]; exists {
-		token = tokenIntf.(string)
-		if token == "" {
-			logrus.Errorf("invalid token")
-			return nil, ErrInvalidVaultToken
+	return client, nil
+}
+
+func New(
+	secretConfig map[string]interface{},
+) (secrets.Secrets, error) {
+	config := api.DefaultConfig()
+	// If ReadEnvironmentKey specified override the
+	// default config.
+	var readEnvConfig bool
+	if _, readEnvConfig = secretConfig[ReadEnvironmentKey]; readEnvConfig {
+		err := config.ReadEnvironment()
+		if err != nil {
+			return nil, err
 		}
-		client.SetToken(token)
-	} else {
-		token, exists := os.LookupEnv(VaultTokenKey)
-		if !exists {
-			logrus.Errorf("token not set")
+	}
+	client, err := getVaultClient(config)
+	if err != nil {
+		return nil, err
+	}
+
+	if !readEnvConfig {
+		// Set Vault Token
+		token := getVaultParam(secretConfig, VaultTokenKey)
+		if token == "" {
 			return nil, ErrVaultTokenNotSet
 		}
 		client.SetToken(token)
+		address := getVaultParam(secretConfig, VaultAddressKey)
+		if address == "" {
+			return nil, ErrVaultAddressNotSet
+		}
+		client.SetAddress(address)
+
 	}
 	return &vaultSecrets{
 		endpoint: config.Address,
 		client:   client,
 	}, nil
+
 }
 
 func (v *vaultSecrets) String() string {
@@ -87,11 +106,14 @@ func (v *vaultSecrets) GetSecret(
 	secretId string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	secret, err := v.client.Logical().Read(getSecretKey(secretId) + encryptedKeyId)
+	secretValue, err := v.client.Logical().Read(getSecretKey(secretId))
 	if err != nil {
 		return nil, err
 	}
-	return secret.Data, nil
+	if secretValue == nil {
+		return nil, ErrInvalidSecretId
+	}
+	return secretValue.Data, nil
 }
 
 func (v *vaultSecrets) PutSecret(

@@ -35,14 +35,13 @@ func SetInstance(secrets Secrets) error {
 // be used for authenticating with the backend
 func New(
 	name string,
-	endpoint string,
 	secretConfig map[string]interface{},
 ) (Secrets, error) {
 	lock.RLock()
 	defer lock.RUnlock()
 
 	if bInit, exists := secretBackends[name]; exists {
-		return bInit(endpoint, secretConfig)
+		return bInit(secretConfig)
 	}
 	return nil, ErrNotSupported
 }

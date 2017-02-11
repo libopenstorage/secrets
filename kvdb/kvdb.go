@@ -23,10 +23,8 @@ type kvdbSecrets struct {
 }
 
 func New(
-	endpoint string,
 	secretConfig map[string]interface{},
 ) (secrets.Secrets, error) {
-
 	kvdbIntf, exists := secretConfig[KvdbKey]
 	if !exists {
 		return nil, ErrKvdbNotSet
@@ -45,7 +43,7 @@ func (v *kvdbSecrets) GetSecret(
 	secretId string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	var secretData map[string]interface{}
+	secretData := make(map[string]interface{})
 	_, err := v.client.GetVal(SecretKey+secretId, &secretData)
 	if err != nil {
 		return nil, err
