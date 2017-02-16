@@ -88,11 +88,14 @@ func New(
 		if address == "" {
 			return nil, ErrVaultAddressNotSet
 		}
-		client.SetAddress(address)
+		err := client.SetAddress(address)
+		if err != nil {
+			return nil, err
+		}
 
 	}
 	return &vaultSecrets{
-		endpoint: config.Address,
+		endpoint: config.Address(),
 		client:   client,
 	}, nil
 
