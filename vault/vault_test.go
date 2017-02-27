@@ -7,8 +7,6 @@ import (
 )
 
 func TestAll(t *testing.T) {
-	config := make(map[string]interface{})
-	config[VaultAddressKey] = "<vault_endpoint>"
-	config[VaultTokenKey] = "<vault_token>"
-	test.Run(New, config, t)
+	// Set the relevant environmnet fields for vault.
+	test.Run(New, nil, t)
 }

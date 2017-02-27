@@ -11,7 +11,6 @@ import (
 
 const (
 	Name               = "hashicorp-vault"
-	ReadEnvironmentKey = "READ_ENVIRONMENT"
 	VaultTokenKey      = "VAULT_TOKEN"
 	VaultAddressKey    = "VAULT_ADDR"
 	defaultEndpoint    = "http://127.0.0.1:8200"
@@ -65,12 +64,13 @@ func New(
 	config := api.DefaultConfig()
 	// If ReadEnvironmentKey specified override the
 	// default config.
-	var readEnvConfig bool
-	if _, readEnvConfig = secretConfig[ReadEnvironmentKey]; readEnvConfig {
+	readEnvConfig := false
+	if secretConfig == nil || len(secretConfig) == 0 {
 		err := config.ReadEnvironment()
 		if err != nil {
 			return nil, err
 		}
+		readEnvConfig = true
 	}
 	client, err := getVaultClient(config)
 	if err != nil {
@@ -95,7 +95,7 @@ func New(
 
 	}
 	return &vaultSecrets{
-		endpoint: config.Address(),
+		endpoint: config.Address,
 		client:   client,
 	}, nil
 
