@@ -5,8 +5,10 @@ import (
 )
 
 var (
-	// ErrNotSupported implementation of specific function is not supported
+	// ErrNotSupported returned when implementation of specific function is not supported
 	ErrNotSupported = errors.New("implementation not supported")
+	// ErrNotAuthenticated returned when not authenticated with secrets endpoint
+	ErrNotAuthenticated  = errors.New("Not authenticated with the secrets endpoint.")
 )
 
 // Secrets interface implemented by backed Key Management Systems (KMS)
