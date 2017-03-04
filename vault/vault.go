@@ -21,7 +21,6 @@ var (
 	ErrVaultTokenNotSet   = errors.New("VAULT_TOKEN not set.")
 	ErrVaultAddressNotSet = errors.New("VAULT_ADDR not set.")
 	ErrInvalidVaultToken  = errors.New("VAULT_TOKEN is invalid")
-	ErrInvalidSecretId = errors.New("No Secret Data found for Secret Id")
 )
 
 var ()
@@ -121,7 +120,7 @@ func (v *vaultSecrets) GetSecret(
 		return nil, err
 	}
 	if secretValue == nil {
-		return nil, ErrInvalidSecretId
+		return nil, secrets.ErrInvalidSecretId
 	}
 	return secretValue.Data, nil
 }
