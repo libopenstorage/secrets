@@ -13,6 +13,10 @@ var (
 	ErrInvalidSecretId = errors.New("No Secret Data found for Secret Id")
 )
 
+const (
+	SecretPath = "/var/lib/osd/secrets/"
+)
+
 // Secrets interface implemented by backed Key Management Systems (KMS)
 type Secrets interface {
 	// String representation of the backend KMS
