@@ -6,6 +6,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
+        "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 )
 
 type AWSCredentials interface {
@@ -33,7 +36,13 @@ func NewAWSCredentials(id, secret, token string) (AWSCredentials, error) {
 		url := "http://169.254.169.254/latest/meta-data/"
 		res, err := client.Get(url)
 		if err == nil {
-			providers = append(providers, &ec2rolecreds.EC2RoleProvider{})
+			sess := session.Must(session.NewSession())
+                        ec2RoleProvider := &ec2rolecreds.EC2RoleProvider{
+				Client: ec2metadata.New(sess, &aws.Config{
+					HTTPClient: &client,
+                                }),
+                        }
+                        providers = append(providers, ec2RoleProvider)
 			res.Body.Close()
 		}
 		creds = credentials.NewChainCredentials(providers)
