@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -102,7 +103,7 @@ func New(
 	}
 	config := &aws.Config{
 		Credentials: creds,
-		Region: &region,
+		Region:      &region,
 	}
 	sess := session.New(config)
 	kmsClient := kms.New(sess)
@@ -123,9 +124,21 @@ func (a *awsKmsSecrets) GetSecret(
 	secretId string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	path := secrets.SecretPath + secretId
+	var (
+		path        string
+		secretIdKey string
+	)
+	if checkValidPath(secretId) {
+		path = secretId
+		secretIdKey = getIdFromPath(path)
+	} else {
+		path = secrets.SecretPath + secretId
+		secretIdKey = secretId
+	}
+
 	cipherBlob := []byte{}
 	_, err := os.Stat(path)
+
 	if err == nil || os.IsExist(err) {
 		cipherBlob, err = ioutil.ReadFile(path)
 		if err != nil {
@@ -133,6 +146,7 @@ func (a *awsKmsSecrets) GetSecret(
 				" associated with secretId: %v", err)
 		}
 	}
+	// EncryptedDataKey passed in as an argument
 	if len(cipherBlob) == 0 {
 		cipherBlob = []byte(secretId)
 	}
@@ -145,7 +159,7 @@ func (a *awsKmsSecrets) GetSecret(
 		return nil, err
 	}
 	secretData := make(map[string]interface{})
-	secretData[secretId] = output.Plaintext
+	secretData[secretIdKey] = output.Plaintext
 	return secretData, nil
 }
 
@@ -154,6 +168,9 @@ func (a *awsKmsSecrets) PutSecret(
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) error {
+	if checkValidPath(secretId) {
+		return secrets.ErrSecretExists
+	}
 	if secretData != nil {
 		return fmt.Errorf("AWS KMS does not support storing of custom secret data")
 	}
@@ -161,12 +178,11 @@ func (a *awsKmsSecrets) PutSecret(
 	input := &kms.GenerateDataKeyInput{
 		KeyId:             &a.cmk,
 		EncryptionContext: getAWSKeyContext(keyContext),
-		KeySpec: &keySpec,
+		KeySpec:           &keySpec,
 	}
 	path := secrets.SecretPath + secretId
-	_, err := os.Stat(path)
-	if os.IsExist(err) {
-		return fmt.Errorf("Secret Id already exists.")
+	if checkValidPath(path) {
+		return secrets.ErrSecretExists
 	}
 
 	output, err := a.client.GenerateDataKey(input)
@@ -224,4 +240,21 @@ func getAWSKeyContext(keyContext map[string]string) map[string]*string {
 		encKeyContext[k] = &v
 	}
 	return encKeyContext
+}
+
+func checkValidPath(path string) bool {
+	if _, err := os.Stat(path); err == nil {
+		return true
+	}
+	return false
+
+}
+
+func getIdFromPath(path string) string {
+	path = strings.TrimSuffix(path, "/")
+	tokens := strings.Split(path, "/")
+	if len(tokens) == 0 {
+		return path
+	}
+	return tokens[len(tokens)-1]
 }
