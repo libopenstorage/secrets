@@ -17,17 +17,14 @@ func Instance() Secrets {
 }
 
 // SetInstance sets the singleton instance of the secrets backend.
-func SetInstance(secrets Secrets) error {
-	if instance == nil {
+func SetInstance(secretsInstance Secrets) error {
+	if secretsInstance != nil {
 		lock.Lock()
 		defer lock.Unlock()
-		if instance == nil {
-			instance = secrets
-			return nil
-		}
+		instance = secretsInstance
+		return nil
 	}
-	return fmt.Errorf("Secrets instance is already"+
-		" set to %v", instance.String())
+	return fmt.Errorf("Secrets instance cannot be nil")
 }
 
 // New returns a new instance of Secrets backend KMS identified by
