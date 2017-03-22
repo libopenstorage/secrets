@@ -17,12 +17,11 @@ import (
 
 const (
 	Name                    = "aws-kms"
-	awsAccessKey            = "AWS_ACCESS_KEY_ID"
-	awsSecretAccessKey      = "AWS_SECRET_ACCESS_KEY"
-	awsTokenKey             = "AWS_SECRET_TOKEN_KEY"
-	awsSharedCredentialsKey = "AWS_SHARED_CREDENTIALS_FILE"
-	awsRegionKey            = "AWS_REGION"
-	awsCMKey                = "AWS_CMK"
+	AwsAccessKey            = "AWS_ACCESS_KEY_ID"
+	AwsSecretAccessKey      = "AWS_SECRET_ACCESS_KEY"
+	AwsTokenKey             = "AWS_SECRET_TOKEN_KEY"
+	AwsRegionKey            = "AWS_REGION"
+	AwsCMKey                = "AWS_CMK"
 	SecretKey               = "secret/"
 )
 
@@ -47,19 +46,19 @@ func getSecretKey(secretId string) string {
 }
 
 func authKeys(params map[string]interface{}) (string, string, string, error) {
-	accessKey, err := getAuthKey(awsAccessKey, params)
+	accessKey, err := getAuthKey(AwsAccessKey, params)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
-	secretKey, err := getAuthKey(awsSecretAccessKey, params)
+	secretKey, err := getAuthKey(AwsSecretAccessKey, params)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
-	secretToken, err := getAuthKey(awsTokenKey, params)
+	secretToken, err := getAuthKey(AwsTokenKey, params)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	return accessKey, secretKey, secretToken, nil
@@ -84,12 +83,12 @@ func New(
 		return nil, ErrCMKNotProvided
 	}
 
-	v, _ := secretConfig[awsCMKey]
+	v, _ := secretConfig[AwsCMKey]
 	cmk, _ := v.(string)
 	if cmk == "" {
 		return nil, ErrCMKNotProvided
 	}
-	v, _ = secretConfig[awsRegionKey]
+	v, _ = secretConfig[AwsRegionKey]
 	region, _ := v.(string)
 	if region == "" {
 		return nil, ErrAWSRegionNotProvided

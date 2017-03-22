@@ -17,8 +17,8 @@ func TestAll(t *testing.T) {
 	// Set the relevant environmnet fields for aws.
 	secretConfig := make(map[string]interface{})
 	// Fill in the appropriate keys and values
-	secretConfig[awsCMKey] = "<cmk-key>"
-	secretConfig[awsRegionKey] = "<aws-region>"
+	secretConfig[AwsCMKey] = "<cmk>"
+	secretConfig[AwsRegionKey] = "<region>"
 	as, err := NewAwsSecretTest(secretConfig)
 	if err != nil {
 		t.Fatalf("Unable to create a AWS Secret instance: %v", err)
