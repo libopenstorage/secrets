@@ -46,7 +46,7 @@ func getSecretKey(secretId string) string {
 	return SecretKey + secretId
 }
 
-func authKeys(params map[string]interface{}) (string, string, error) {
+func authKeys(params map[string]interface{}) (string, string, string, error) {
 	accessKey, err := getAuthKey(awsAccessKey, params)
 	if err != nil {
 		return "", "", err
@@ -56,7 +56,13 @@ func authKeys(params map[string]interface{}) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	return accessKey, secretKey, nil
+
+	secretToken, err := getAuthKey(awsTokenKey, params)
+	if err != nil {
+		return "", "", err
+	}
+
+	return accessKey, secretKey, secretToken, nil
 }
 
 func getAuthKey(key string, params map[string]interface{}) (string, error) {
@@ -89,11 +95,11 @@ func New(
 		return nil, ErrAWSRegionNotProvided
 	}
 
-	id, secret, err := authKeys(secretConfig)
+	id, secret, token, err := authKeys(secretConfig)
 	if err != nil {
 		return nil, err
 	}
-	asc, err := sc.NewAWSCredentials(id, secret, "")
+	asc, err := sc.NewAWSCredentials(id, secret, token)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get credentials: %v", err)
 	}
