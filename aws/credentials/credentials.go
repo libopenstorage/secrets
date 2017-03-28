@@ -29,7 +29,6 @@ func NewAWSCredentials(id, secret, token string) (AWSCredentials, error) {
 	} else {
 		providers := []credentials.Provider{
 			&credentials.EnvProvider{},
-			&credentials.SharedCredentialsProvider{},
 		}
 		// Check if we are running on EC2 instance
 		client := http.Client{Timeout: time.Second * 10}
@@ -45,6 +44,7 @@ func NewAWSCredentials(id, secret, token string) (AWSCredentials, error) {
                         providers = append(providers, ec2RoleProvider)
 			res.Body.Close()
 		}
+		providers = append(providers, &credentials.SharedCredentialsProvider{})
 		creds = credentials.NewChainCredentials(providers)
 		if _, err := creds.Get(); err != nil {
 			return nil, err
