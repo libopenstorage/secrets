@@ -66,9 +66,6 @@ func New(
 	readEnvConfig := false
 	if secretConfig == nil || len(secretConfig) == 0 {
 		// An extra check before we call vault's read env config
-		if os.Getenv(VaultTokenKey) == "" {
-			return nil, ErrVaultTokenNotSet
-		}
 		if os.Getenv(VaultAddressKey) == "" {
 			return nil, ErrVaultAddressNotSet
 		}
