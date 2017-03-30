@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	Name               = "hashicorp-vault"
+	Name               = "vault"
 	VaultTokenKey      = "VAULT_TOKEN"
 	VaultAddressKey    = "VAULT_ADDR"
 	defaultEndpoint    = "http://127.0.0.1:8200"
