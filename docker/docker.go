@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	Name             = "docker-secrets"
+	Name             = "docker"
 	DockerSecretPath = "/run/secrets/"
 )
 
