@@ -8,7 +8,7 @@ var (
 	// ErrNotSupported returned when implementation of specific function is not supported
 	ErrNotSupported = errors.New("implementation not supported")
 	// ErrNotAuthenticated returned when not authenticated with secrets endpoint
-	ErrNotAuthenticated  = errors.New("Not authenticated with the secrets endpoint.")
+	ErrNotAuthenticated  = errors.New("Not authenticated with the secrets endpoint")
 	// ErrInvalidSecretId returned when no secret data is found associated with the id
 	ErrInvalidSecretId = errors.New("No Secret Data found for Secret Id")
 	// ErrSecretExists returned when a secret for the given secret id already exists
