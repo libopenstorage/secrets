@@ -3,6 +3,7 @@ package vault
 import (
 	"errors"
 	"os"
+	"strconv"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/vault/api"
@@ -10,17 +11,17 @@ import (
 )
 
 const (
-	Name               = "vault"
-	VaultTokenKey      = "VAULT_TOKEN"
-	VaultAddressKey    = "VAULT_ADDR"
-	defaultEndpoint    = "http://127.0.0.1:8200"
-	SecretKey          = "secret/"
+	Name            = "vault"
+	defaultEndpoint = "http://127.0.0.1:8200"
+	SecretKey       = "secret/"
+	VaultTokenKey   = "VAULT_TOKEN"
 )
 
 var (
 	ErrVaultTokenNotSet   = errors.New("VAULT_TOKEN not set.")
 	ErrVaultAddressNotSet = errors.New("VAULT_ADDR not set.")
 	ErrInvalidVaultToken  = errors.New("VAULT_TOKEN is invalid")
+	ErrInvalidSkipVerify  = errors.New("VAULT_SKIP_VERIFY is invalid")
 )
 
 var ()
@@ -40,10 +41,6 @@ func getVaultParam(secretConfig map[string]interface{}, paramName string) string
 	if tokenIntf, exists := secretConfig[paramName]; exists {
 		token := tokenIntf.(string)
 		return token
-	}
-	token, exists := os.LookupEnv(VaultTokenKey)
-	if !exists {
-		return ""
 	}
 	return token
 }
@@ -66,7 +63,7 @@ func New(
 	readEnvConfig := false
 	if secretConfig == nil || len(secretConfig) == 0 {
 		// An extra check before we call vault's read env config
-		if os.Getenv(VaultAddressKey) == "" {
+		if os.Getenv(api.EnvVaultAddress) == "" {
 			return nil, ErrVaultAddressNotSet
 		}
 		err := config.ReadEnvironment()
@@ -75,28 +72,51 @@ func New(
 		}
 		readEnvConfig = true
 	}
+	var token string
+	if !readEnvConfig {
+		// Vault Token
+		token = getVaultParam(secretConfig, VaultTokenKey)
+		if token == "" {
+			return nil, ErrVaultTokenNotSet
+		}
+		// Vault Address
+		address := getVaultParam(secretConfig, api.EnvVaultAddress)
+		if address == "" {
+			return nil, ErrVaultAddressNotSet
+		}
+		config.Address = address
+		// Get TLS Settings
+		tlsConfig := api.TLSConfig{}
+		skipVerify := getVaultParam(secretConfig, api.EnvVaultInsecure)
+		if skipVerify != "" {
+			insecure, err := strconv.ParseBool(skipVerify)
+			if err != nil {
+				return nil, ErrInvalidSkipVerify
+			}
+			tlsConfig.Insecure = insecure
+		}
+		// Get Cert Paths
+		cacert := getVaultParam(secretConfig, api.EnvVaultCACert)
+		tlsConfig.CACert = cacert
+		capath := getVaultParam(secretConfig, api.EnvVaultCAPath)
+		tlsConfig.CAPath = capath
+		clientcert := getVaultParam(secretConfig, api.EnvVaultClientCert)
+		tlsConfig.ClientCert = clientcert
+		clientkey := getVaultParam(secretConfig, api.EnvVaultClientKey)
+		tlsConfig.ClientKey = clientkey
+		tlsserverName := getVaultParam(secretConfig, api.EnvVaultTLSServerName)
+		tlsConfig.TLSServerName = tlsserverName
+		err := config.ConfigureTLS(&tlsConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
 	client, err := getVaultClient(config)
 	if err != nil {
 		return nil, err
 	}
 
-	if !readEnvConfig {
-		// Set Vault Token
-		token := getVaultParam(secretConfig, VaultTokenKey)
-		if token == "" {
-			return nil, ErrVaultTokenNotSet
-		}
-		client.SetToken(token)
-		address := getVaultParam(secretConfig, VaultAddressKey)
-		if address == "" {
-			return nil, ErrVaultAddressNotSet
-		}
-		err := client.SetAddress(address)
-		if err != nil {
-			return nil, err
-		}
-
-	}
+	client.SetToken(token)
 	return &vaultSecrets{
 		endpoint: config.Address,
 		client:   client,
