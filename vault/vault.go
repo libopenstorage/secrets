@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/vault/api"
@@ -11,10 +12,11 @@ import (
 )
 
 const (
-	Name            = "vault"
-	defaultEndpoint = "http://127.0.0.1:8200"
-	SecretKey       = "secret/"
-	VaultTokenKey   = "VAULT_TOKEN"
+	Name               = "vault"
+	defaultEndpoint    = "http://127.0.0.1:8200"
+	SecretKey          = "secret/"
+	VaultTokenKey      = "VAULT_TOKEN"
+	vaultAddressPrefix = "http"
 )
 
 var (
@@ -22,6 +24,8 @@ var (
 	ErrVaultAddressNotSet = errors.New("VAULT_ADDR not set.")
 	ErrInvalidVaultToken  = errors.New("VAULT_TOKEN is invalid")
 	ErrInvalidSkipVerify  = errors.New("VAULT_SKIP_VERIFY is invalid")
+	ErrInvalidVaultAddress = errors.New("VAULT_ADDRESS is invalid."+
+		" Should be of the form http(s)://<ip>:<port>")
 )
 
 var ()
@@ -84,6 +88,7 @@ func New(
 		if address == "" {
 			return nil, ErrVaultAddressNotSet
 		}
+
 		config.Address = address
 		// Get TLS Settings
 		tlsConfig := api.TLSConfig{}
@@ -111,6 +116,11 @@ func New(
 			return nil, err
 		}
 	}
+	// Vault craps out if address is not in correct format
+	if !strings.HasPrefix(config.Address, vaultAddressPrefix) {
+		return nil, ErrInvalidVaultAddress
+	}
+
 	client, err := getVaultClient(config)
 	if err != nil {
 		return nil, err
