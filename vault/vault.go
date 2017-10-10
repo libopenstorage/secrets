@@ -20,11 +20,11 @@ const (
 )
 
 var (
-	ErrVaultTokenNotSet   = errors.New("VAULT_TOKEN not set.")
-	ErrVaultAddressNotSet = errors.New("VAULT_ADDR not set.")
-	ErrInvalidVaultToken  = errors.New("VAULT_TOKEN is invalid")
-	ErrInvalidSkipVerify  = errors.New("VAULT_SKIP_VERIFY is invalid")
-	ErrInvalidVaultAddress = errors.New("VAULT_ADDRESS is invalid."+
+	ErrVaultTokenNotSet    = errors.New("VAULT_TOKEN not set.")
+	ErrVaultAddressNotSet  = errors.New("VAULT_ADDR not set.")
+	ErrInvalidVaultToken   = errors.New("VAULT_TOKEN is invalid")
+	ErrInvalidSkipVerify   = errors.New("VAULT_SKIP_VERIFY is invalid")
+	ErrInvalidVaultAddress = errors.New("VAULT_ADDRESS is invalid." +
 		" Should be of the form http(s)://<ip>:<port>")
 )
 
@@ -126,7 +126,10 @@ func New(
 		return nil, err
 	}
 
-	client.SetToken(token)
+	if token != "" {
+		// Set the token if present
+		client.SetToken(token)
+	}
 	return &vaultSecrets{
 		endpoint: config.Address,
 		client:   client,
