@@ -1,4 +1,4 @@
-package docker
+package k8s
 
 import (
 	"io/ioutil"
@@ -9,40 +9,40 @@ import (
 )
 
 func TestAll(t *testing.T) {
-	// Set the relevant environment fields for docker.
-	ds, err := NewDockerSecretTest(nil)
+	ks, err := NewK8sSecretTest(nil)
 	if err != nil {
-		t.Fatalf("Unable to create a Docker Secret instance: %v", err)
+		t.Fatalf("Unable to create a Kubernetes Secret instance: %v", err)
 		return
 	}
-	test.Run(ds, t)
+	test.Run(ks, t)
 }
 
-type dockerSecretTest struct {
+type k8sSecretTest struct {
 	s secrets.Secrets
 }
 
-func NewDockerSecretTest(secretConfig map[string]interface{}) (test.SecretTest, error) {
+func NewK8sSecretTest(secretConfig map[string]interface{}) (test.SecretTest, error) {
 	s, err := New(secretConfig)
 	if err != nil {
 		return nil, err
 	}
-	return &dockerSecretTest{s}, nil
+	return &k8sSecretTest{s}, nil
 }
 
-func (d *dockerSecretTest) TestPutSecret(t *testing.T) error {
+// PutSecret is not yet implemented
+func (k *k8sSecretTest) TestPutSecret(t *testing.T) error {
 	return nil
 }
 
-func (d *dockerSecretTest) TestGetSecret(t *testing.T) error {
-	secretId := "openstorage_secret"
-	cipherBlob := []byte{10, 12, 13}
+func (k *k8sSecretTest) TestGetSecret(t *testing.T) error {
+	secretId := "mysql_username"
+	cipherBlob := []byte{116, 101, 115, 116}
 	err := ioutil.WriteFile(getSecretKey(secretId), cipherBlob, 0644)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	secretData, err := d.s.GetSecret(secretId, nil)
+	secretData, err := k.s.GetSecret(secretId, nil)
 	if err != nil {
 		t.Errorf("Unexpected error in GetSecret: %v", err)
 	}
