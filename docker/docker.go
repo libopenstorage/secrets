@@ -45,7 +45,7 @@ func (v *dockerSecrets) GetSecret(
 	cipherBlob, err = ioutil.ReadFile(secretPath)
 	if err != nil || len(cipherBlob) == 0 {
 		return nil, fmt.Errorf("Invalid secretId. Unable to read cipherBlob"+
-			" associated with secretId: %v", err)
+			" associated with secretId: %v", secretId)
 	}
 
 	secretData := make(map[string]interface{})

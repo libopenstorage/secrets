@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	Name                    = "aws-kms"
-	AwsAccessKey            = "AWS_ACCESS_KEY_ID"
-	AwsSecretAccessKey      = "AWS_SECRET_ACCESS_KEY"
-	AwsTokenKey             = "AWS_SECRET_TOKEN_KEY"
-	AwsRegionKey            = "AWS_REGION"
-	AwsCMKey                = "AWS_CMK"
-	SecretKey               = "secret/"
+	Name               = "aws-kms"
+	AwsAccessKey       = "AWS_ACCESS_KEY_ID"
+	AwsSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
+	AwsTokenKey        = "AWS_SECRET_TOKEN_KEY"
+	AwsRegionKey       = "AWS_REGION"
+	AwsCMKey           = "AWS_CMK"
+	SecretKey          = "secret/"
 )
 
 var (
