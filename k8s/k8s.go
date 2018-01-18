@@ -2,22 +2,18 @@ package k8s
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 
 	"github.com/libopenstorage/secrets"
+	"github.com/portworx/sched-ops/k8s"
 )
 
 const (
-	Name          = "k8s"
-	K8sSecretPath = "/etc/secrets/"
+	Name            = "k8s"
+	SecretNamespace = "namespace"
+	SecretName      = "secret_name"
 )
 
 type k8sSecrets struct{}
-
-func getSecretKey(secretId string) string {
-	return K8sSecretPath + secretId
-}
 
 func New(
 	secretConfig map[string]interface{},
@@ -33,23 +29,30 @@ func (s *k8sSecrets) GetSecret(
 	secretId string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	cipherBlob := []byte{}
-	secretPath := getSecretKey(secretId)
-	_, err := os.Stat(secretPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, secrets.ErrInvalidSecretId
-		}
-		return nil, err
+	namespace, exists := keyContext[SecretNamespace]
+	if !exists {
+		return nil, fmt.Errorf("Namespace cannot be empty.")
 	}
-	cipherBlob, err = ioutil.ReadFile(secretPath)
-	if err != nil || len(cipherBlob) == 0 {
+
+	secretName, exists := keyContext[SecretName]
+	if !exists {
+		return nil, fmt.Errorf("Secret name cannot be empty.")
+	}
+
+	secret, err := k8s.Instance().GetSecret(secretName, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get secret from [%s]. Err: %v",
+			secretName, err)
+	}
+
+	cipherBlob, exists := secret.Data[secretId]
+	if !exists || len(cipherBlob) == 0 {
 		return nil, fmt.Errorf("Invalid secretId. Unable to read cipherBlob"+
-			" associated with secretId: %v", err)
+			" associated with secretId: %v", secretId)
 	}
 
 	secretData := make(map[string]interface{})
-	secretData[secretId] = cipherBlob
+	secretData[secretId] = fmt.Sprintf("%s", cipherBlob)
 	return secretData, nil
 }
 
