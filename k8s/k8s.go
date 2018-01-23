@@ -10,7 +10,6 @@ import (
 const (
 	Name            = "k8s"
 	SecretNamespace = "namespace"
-	SecretName      = "secret_name"
 )
 
 type k8sSecrets struct{}
@@ -26,7 +25,7 @@ func (s *k8sSecrets) String() string {
 }
 
 func (s *k8sSecrets) GetSecret(
-	secretId string,
+	secretName string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
 	namespace, exists := keyContext[SecretNamespace]
@@ -34,34 +33,48 @@ func (s *k8sSecrets) GetSecret(
 		return nil, fmt.Errorf("Namespace cannot be empty.")
 	}
 
-	secretName, exists := keyContext[SecretName]
-	if !exists {
-		return nil, fmt.Errorf("Secret name cannot be empty.")
-	}
-
 	secret, err := k8s.Instance().GetSecret(secretName, namespace)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get secret from [%s]. Err: %v",
+		return nil, fmt.Errorf("Failed to get secret [%s]. Err: %v",
 			secretName, err)
 	}
-
-	cipherBlob, exists := secret.Data[secretId]
-	if !exists || len(cipherBlob) == 0 {
-		return nil, fmt.Errorf("Invalid secretId. Unable to read cipherBlob"+
-			" associated with secretId: %v", secretId)
+	if secret == nil {
+		return nil, secrets.ErrInvalidSecretId
 	}
 
-	secretData := make(map[string]interface{})
-	secretData[secretId] = fmt.Sprintf("%s", cipherBlob)
-	return secretData, nil
+	data := make(map[string]interface{})
+	for key, val := range secret.Data {
+		data[key] = fmt.Sprintf("%s", val)
+	}
+	return data, nil
 }
 
 func (s *k8sSecrets) PutSecret(
-	secretId string,
+	secretName string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) error {
-	return secrets.ErrNotSupported
+	namespace, exists := keyContext[SecretNamespace]
+	if !exists {
+		return fmt.Errorf("Namespace cannot be empty.")
+	}
+	if len(secretData) == 0 {
+		return nil
+	}
+
+	data := make(map[string][]byte)
+	for key, val := range secretData {
+		if v, ok := val.(string); ok {
+			data[key] = []byte(v)
+		} else if v, ok := val.([]byte); ok {
+			data[key] = v
+		} else {
+			return fmt.Errorf("Unsupported data type for data: %s", key)
+		}
+	}
+
+	_, err := k8s.Instance().UpdateSecretData(secretName, namespace, data)
+	return err
 }
 
 func (s *k8sSecrets) Encrypt(
