@@ -1,6 +1,7 @@
 package aws
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -141,7 +142,9 @@ func (a *awsKmsSecrets) GetSecret(
 		secretIdKey = secretId
 	}
 
-	cipherBlob := []byte{}
+	var (
+		cipherBlob, decodedCipherBlob []byte
+	)
 	_, err := os.Stat(path)
 
 	if err == nil || os.IsExist(err) {
@@ -155,16 +158,22 @@ func (a *awsKmsSecrets) GetSecret(
 	if len(cipherBlob) == 0 {
 		cipherBlob = []byte(secretId)
 	}
+	// AWS KMS api requires the cipherBlob to be in base64 decoded format.
+	// Check if it is encoded and decode if required.
+	decodedCipherBlob, err = base64.StdEncoding.DecodeString(string(cipherBlob))
+	if err != nil {
+		decodedCipherBlob = cipherBlob
+	}
 	input := &kms.DecryptInput{
 		EncryptionContext: getAWSKeyContext(keyContext),
-		CiphertextBlob:    cipherBlob,
+		CiphertextBlob:    decodedCipherBlob,
 	}
 	output, err := a.client.Decrypt(input)
 	if err != nil {
 		return nil, err
 	}
 	secretData := make(map[string]interface{})
-	secretData[secretIdKey] = output.Plaintext
+	secretData[secretIdKey] = string(output.Plaintext)
 	return secretData, nil
 }
 
