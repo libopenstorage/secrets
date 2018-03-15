@@ -28,12 +28,12 @@ const (
 	AwsAccessKey = "AWS_ACCESS_KEY_ID"
 	// AwsSecretAccessKey corresponds to AWS credential AWS_SECRET_ACCESS_KEY
 	AwsSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
-	// AwsTokenKey correspinds to AWS credential AWS_SECRET_TOKEN_KEY
+	// AwsTokenKey corresponds to AWS credential AWS_SECRET_TOKEN_KEY
 	AwsTokenKey = "AWS_SECRET_TOKEN_KEY"
 	// AwsRegionKey defines the AWS region
 	AwsRegionKey = "AWS_REGION"
-	// AwsCMKKey defines the KMS customer master key
-	AwsCMKKey = "AWS_CMK"
+	// AwsCMKey defines the KMS customer master key
+	AwsCMKey = "AWS_CMK"
 	// KMSKvdbKey is used to setup AWS KMS Secret Store with kvdb for persistence.
 	KMSKvdbKey               = "KMS_KVDB"
 	kvdbPublicBasePath       = "aws_kms/secrets/public/"
@@ -69,7 +69,7 @@ type awsKmsSecrets struct {
 }
 
 type persistenceStore interface {
-	// getPublic return the persisted aws kms public info
+	// getPublic returns the persisted aws kms public info
 	// of the given secretId
 	getPublic(secretId string) ([]byte, error)
 
@@ -81,8 +81,8 @@ type persistenceStore interface {
 	// exists
 	exists(secretId string) (bool, error)
 
-	// set persists the aws kms public info
-	// of the given secretId
+	// set persists the aws kms public info and encyrpted secretData if provided
+	// for the given secretId
 	set(secretId string, cipher, plain []byte, secretData map[string]interface{}) error
 
 	// name returns the name of persistence store
@@ -210,7 +210,7 @@ func (k *kvdbPersistenceStore) set(
 	}
 
 	// Use the plaintext cipher to encrypt the
-	// marshaled secretData
+	// marshalled secretData
 	encryptedData, err := encrypt(data, plain)
 	if err != nil {
 		return err
@@ -250,7 +250,7 @@ func New(
 	}
 	var ps persistenceStore
 
-	v, _ := secretConfig[AwsCMKKey]
+	v, _ := secretConfig[AwsCMKey]
 	cmk, _ := v.(string)
 	if cmk == "" {
 		return nil, ErrCMKNotProvided
@@ -312,10 +312,10 @@ func (a *awsKmsSecrets) GetSecret(
 		secretData                    map[string]interface{}
 	)
 
-	if exists, err := a.ps.exists(secretId); err == nil && !exists {
-		return nil, secrets.ErrInvalidSecretId
-	} else if err != nil {
+	if exists, err := a.ps.exists(secretId); err != nil {
 		return nil, err
+	} else if !exists {
+		return nil, secrets.ErrInvalidSecretId
 	}
 
 	cipherBlob, err := a.ps.getPublic(secretId)
@@ -345,10 +345,10 @@ func (a *awsKmsSecrets) GetSecret(
 	// check if kvdbPersistenceStore has any secretData stored for this
 	// secretId
 	secretData, err = a.ps.getSecretData(secretId, output.Plaintext)
-	if err == nil && secretData != nil {
-		return secretData, nil
-	} else if err != nil {
+	if err != nil {
 		return nil, err
+	} else if secretData != nil {
+		return secretData, nil
 	}
 
 return_plaintext:
