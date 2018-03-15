@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/vault/api"
 	"github.com/libopenstorage/secrets"
+	"github.com/sirupsen/logrus"
 )
 
 const (
