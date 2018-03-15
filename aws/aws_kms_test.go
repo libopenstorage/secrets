@@ -19,7 +19,7 @@ func TestAll(t *testing.T) {
 	// Set the relevant environmnet fields for aws.
 	secretConfig := make(map[string]interface{})
 	// Fill in the appropriate keys and values
-	secretConfig[AwsCMKKey] = os.Getenv(AwsCMKKey)
+	secretConfig[AwsCMKey] = os.Getenv(AwsCMKey)
 	secretConfig[AwsRegionKey] = os.Getenv(AwsRegionKey)
 
 	os.RemoveAll(secrets.SecretPath + secretIdWithoutData)
@@ -35,6 +35,7 @@ func TestAll(t *testing.T) {
 	kv, err := kvdb.New(mem.Name, "openstorage/", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Unable to create a AWS Secret instance: %v", err)
+		return
 	}
 	secretConfig[KMSKvdbKey] = kv
 	as, err = NewAwsSecretTest(secretConfig)
