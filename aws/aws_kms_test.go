@@ -76,12 +76,12 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 
 	// PutSecret with already existing secretId
 	err = a.s.PutSecret(secretIdWithData, secretData, nil)
-	if err != secrets.ErrSecretExists && err != ErrInvalidRequest {
+	if err != nil && err != ErrInvalidRequest {
 		t.Errorf("Expected PutSecret to fail with ErrSecretExists error")
 	}
 
 	err = a.s.PutSecret(secretIdWithoutData, nil, nil)
-	if err != secrets.ErrSecretExists {
+	if err != nil {
 		t.Errorf("Expected PutSecret to fail with ErrSecretExists error")
 	}
 

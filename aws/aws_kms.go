@@ -149,7 +149,11 @@ func (k *kvdbPersistenceStore) getPublic(secretId string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return kvp.Value, nil
+	decodedCipherBlob, err := base64.StdEncoding.DecodeString(string(kvp.Value))
+	if err != nil {
+		return nil, err
+	}
+	return decodedCipherBlob, nil
 }
 
 func (k *kvdbPersistenceStore) getSecretData(
@@ -194,8 +198,9 @@ func (k *kvdbPersistenceStore) set(
 	secretData map[string]interface{},
 ) error {
 	key := kvdbPublicBasePath + secretId
+	encodeCipher := base64.StdEncoding.EncodeToString(cipher)
 	// Save the public cipher
-	_, err := k.kv.Put(key, cipher, 0)
+	_, err := k.kv.Put(key, encodeCipher, 0)
 	if err != nil {
 		return err
 	}
@@ -362,12 +367,6 @@ func (a *awsKmsSecrets) PutSecret(
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) error {
-
-	if exists, err := a.ps.exists(secretId); exists && err == nil {
-		return secrets.ErrSecretExists
-	} else if err != nil {
-		return err
-	}
 
 	keySpec := "AES_256"
 	input := &kms.GenerateDataKeyInput{
