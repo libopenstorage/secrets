@@ -28,8 +28,6 @@ var (
 		" Should be of the form http(s)://<ip>:<port>")
 )
 
-var ()
-
 type vaultSecrets struct {
 	client   *api.Client
 	endpoint string
