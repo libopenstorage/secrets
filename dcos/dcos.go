@@ -18,8 +18,9 @@ const (
 )
 
 const (
-	Name           = "dcos"
-	SecretsAuthor  = "osd"
+	// Name name of the secret provider
+	Name = "dcos"
+	// KeySecretStore key used to set the secret store
 	KeySecretStore = "secret_store"
 )
 
@@ -113,11 +114,6 @@ func (d *dcosSecrets) GetSecret(
 
 	var result map[string]interface{}
 
-	// XXX: Currently DCOS does not take the author even though we set it while
-	// writing secrets. Author helps us identify secrets written by PutSecret()
-	// which are maps. All other value are strings set from the UI or DCOS cli.
-	// Until the fix we will try to unmarshal the value, if it succeeds we send
-	// the unmarshalled map, else we return the value as it is.
 	err = json.Unmarshal([]byte(secret.Value), &result)
 	if err != nil {
 		result = make(map[string]interface{})
@@ -141,8 +137,7 @@ func (d *dcosSecrets) PutSecret(
 	}
 
 	secret := &api.Secret{
-		Author: SecretsAuthor,
-		Value:  string(value),
+		Value: string(value),
 	}
 	return d.client.CreateOrUpdateSecret(keyContext[KeySecretStore], secretPath, secret)
 }

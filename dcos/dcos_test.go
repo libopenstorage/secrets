@@ -156,8 +156,7 @@ func TestPutSecretWhenClientReturnsError(t *testing.T) {
 		CreateOrUpdateSecret("store",
 			"path/to/secret",
 			gomock.Eq(&api.Secret{
-				Author: SecretsAuthor,
-				Value:  `{"alpha":"foo"}`,
+				Value: `{"alpha":"foo"}`,
 			})).
 		Return(fmt.Errorf("Put secret error")).
 		Times(1)
@@ -180,8 +179,7 @@ func TestPutSecretWithValidData(t *testing.T) {
 		CreateOrUpdateSecret("store",
 			"path/to/secret",
 			gomock.Eq(&api.Secret{
-				Author: SecretsAuthor,
-				Value:  `{"alpha":"foo","numeric":10}`,
+				Value: `{"alpha":"foo","numeric":10}`,
 			})).
 		Return(nil).
 		Times(1)
