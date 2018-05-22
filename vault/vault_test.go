@@ -1,68 +1,135 @@
 package vault
 
 import (
+	"fmt"
+	"os"
 	"testing"
 
-	"github.com/libopenstorage/secrets"
-	"github.com/libopenstorage/secrets/test"
+	"github.com/hashicorp/vault/api"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestAll(t *testing.T) {
-	// Set the relevant environmnet fields for vault.
-	vs, err := NewVaultSecretTest(nil)
-	if err != nil {
-		t.Fatalf("Unable to create a Vault Secret instance: %v", err)
-		return
-	}
-	test.Run(vs, t)
+func setup() {
+	os.Unsetenv(api.EnvVaultToken)
+	os.Unsetenv(api.EnvVaultAddress)
+	os.Unsetenv(api.EnvVaultMaxRetries)
+	os.Unsetenv(api.EnvVaultInsecure)
 }
 
-type vaultSecretTest struct {
-	s secrets.Secrets
-}
+func TestNew(t *testing.T) {
+	setup()
 
-func NewVaultSecretTest(secretConfig map[string]interface{}) (test.SecretTest, error) {
-	s, err := New(secretConfig)
-	if err != nil {
-		return nil, err
-	}
-	return &vaultSecretTest{s}, nil
-}
+	// error in vault default config, when no secrets config given
+	os.Setenv(api.EnvVaultMaxRetries, "invalid_int")
+	_, err := New(nil)
 
-func (v *vaultSecretTest) TestPutSecret(t *testing.T) error {
-	data := make(map[string]interface{})
-	keyId := "hello"
-	data["key1"] = "value1"
-	data["key2"] = "value2"
+	assert.NotNil(t, err)
+	os.Unsetenv(api.EnvVaultMaxRetries)
 
-	if v.s == nil {
-		t.Fatalf("secrets is nil")
-	}
-	err := v.s.PutSecret(keyId, data, nil)
-	if err != nil {
-		t.Fatalf("Unable to put key into secrets: %v", err)
+	os.Setenv(api.EnvVaultInsecure, "invalid_bool")
+	_, err = New(nil)
+
+	assert.NotNil(t, err)
+	os.Unsetenv(api.EnvVaultInsecure)
+
+	// vault address and token not provided
+	_, err = New(nil)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrVaultTokenNotSet, err)
+
+	// vault address not provided
+	os.Setenv(api.EnvVaultToken, "token")
+
+	_, err = New(nil)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrVaultAddressNotSet, err)
+	os.Unsetenv(api.EnvVaultToken)
+
+	// vault address not provided
+	config := make(map[string]interface{})
+	config[api.EnvVaultToken] = "token"
+
+	_, err = New(config)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrVaultAddressNotSet, err)
+
+	// vault token not provided
+	os.Setenv(api.EnvVaultAddress, "http://127.0.0.1:8200")
+
+	_, err = New(nil)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrVaultTokenNotSet, err)
+	os.Unsetenv(api.EnvVaultAddress)
+
+	// vault token not provided
+	config = make(map[string]interface{})
+	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
+
+	_, err = New(config)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrVaultTokenNotSet, err)
+
+	// vault address is not valid
+	os.Setenv(api.EnvVaultToken, "token")
+	os.Setenv(api.EnvVaultAddress, "invalid://127.0.0.1:8200")
+
+	_, err = New(nil)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrInvalidVaultAddress, err)
+	os.Unsetenv(api.EnvVaultToken)
+	os.Unsetenv(api.EnvVaultAddress)
+
+	// invalid VAULT_SKIP_VERIFY in the config
+	config = make(map[string]interface{})
+	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
+	config[api.EnvVaultToken] = "token"
+	config[api.EnvVaultInsecure] = "invalid_bool"
+
+	_, err = New(config)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrInvalidSkipVerify, err)
+
+	// error from TLS config
+	config = make(map[string]interface{})
+	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
+	config[api.EnvVaultToken] = "token"
+	config[api.EnvVaultInsecure] = "false"
+	config[api.EnvVaultClientCert] = "path/does/not/exist"
+	config[api.EnvVaultClientKey] = "path/does/not/exist"
+
+	_, err = New(config)
+
+	assert.NotNil(t, err)
+
+	// error creating a new vault client
+	config = make(map[string]interface{})
+	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
+	config[api.EnvVaultToken] = "token"
+	oldNewClient := newVaultClient
+	newVaultClient = func(*api.Config) (*api.Client, error) {
+		return nil, fmt.Errorf("new client error")
 	}
 
-	plainText, err := v.s.GetSecret(keyId, nil)
-	if err != nil {
-		t.Fatalf("Unable to get key from secrets: %v", err)
-	}
-	if len(data) != len(plainText) {
-		t.Errorf("Put and Get keys do not match")
-	}
-	for k, v := range plainText {
-		if o, exists := data[k]; !exists || o != v {
-			t.Errorf("Put and Get values do not match")
-		}
-	}
-	_, err = v.s.GetSecret("unknown_key", nil)
-	if err == nil {
-		t.Fatalf("Expected error when no secret key present")
-	}
-	return nil
-}
+	_, err = New(config)
 
-func (v *vaultSecretTest) TestGetSecret(t *testing.T) error {
-	// TestPutSecret does get testing as well
-	return nil
+	assert.NotNil(t, err)
+	assert.Equal(t, "new client error", err.Error())
+	newVaultClient = oldNewClient
+
+	// create client without error
+	config = make(map[string]interface{})
+	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
+	config[api.EnvVaultToken] = "token"
+
+	client, err := New(config)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, client)
 }
