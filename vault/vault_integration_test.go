@@ -1,19 +1,47 @@
 package vault
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/test"
 )
 
-func TestAll(t *testing.T) {
+func TestAllWithDefaultBackend(t *testing.T) {
 	// Set the relevant environment fields for vault.
 	vs, err := NewVaultSecretTest(nil)
 	if err != nil {
 		t.Fatalf("Unable to create a Vault Secret instance: %v", err)
 		return
 	}
+	test.Run(vs, t)
+}
+
+func TestAllWithDifferentBackend(t *testing.T) {
+	// Set the relevant environment fields for vault.
+	secretConfig := map[string]interface{}{
+		"VAULT_BACKEND_PATH": "test/secret",
+	}
+
+	s, err := New(secretConfig)
+	if err != nil {
+		t.Fatalf("Unable to create a Vault Secret instance: %v", err)
+	}
+
+	// Only verifying if the test kv backend is created or not
+	_, err = s.GetSecret("foo", nil)
+	if strings.Contains(err.Error(), "Secrets engine with mount path") {
+		t.Fatalf("Please create a kv backend with path 'test/secret' for testing\n" +
+			"`vault secrets enable [-version=2] -path=test/secret kv`")
+	}
+
+	vs, err := NewVaultSecretTest(secretConfig)
+	if err != nil {
+		t.Fatalf("Unable to create a Vault Secret instance: %v", err)
+		return
+	}
+
 	test.Run(vs, t)
 }
 

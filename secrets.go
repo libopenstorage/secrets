@@ -10,7 +10,7 @@ var (
 	// ErrNotAuthenticated returned when not authenticated with secrets endpoint
 	ErrNotAuthenticated = errors.New("Not authenticated with the secrets endpoint")
 	// ErrInvalidSecretId returned when no secret data is found associated with the id
-	ErrInvalidSecretId = errors.New("No Secret Data found for Secret Id")
+	ErrInvalidSecretId = errors.New("No Secret Data found for Secret ID")
 	// ErrEmptySecretData returned when no secret data is provided to store the secret
 	ErrEmptySecretData = errors.New("Secret data cannot be empty")
 	// ErrSecretExists returned when a secret for the given secret id already exists

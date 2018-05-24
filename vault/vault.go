@@ -2,6 +2,7 @@ package vault
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -11,9 +12,12 @@ import (
 )
 
 const (
-	Name               = "vault"
-	SecretKey          = "secret/"
-	vaultAddressPrefix = "http"
+	Name                = "vault"
+	DefaultBackendPath  = "secret/"
+	VaultBackendPathKey = "VAULT_BACKEND_PATH"
+	vaultAddressPrefix  = "http"
+	kvVersionKey        = "version"
+	kvDataKey           = "data"
 )
 
 var (
@@ -26,8 +30,9 @@ var (
 )
 
 type vaultSecrets struct {
-	client   *api.Client
-	endpoint string
+	client      *api.Client
+	endpoint    string
+	backendPath string
 }
 
 // These variables are helpful in testing to stub method call from packages
@@ -70,9 +75,19 @@ func New(
 	}
 	client.SetToken(token)
 
+	backendPath := getVaultParam(secretConfig, VaultBackendPathKey)
+	if backendPath != "" {
+		if !strings.HasSuffix(backendPath, "/") {
+			backendPath = backendPath + "/"
+		}
+	} else {
+		backendPath = DefaultBackendPath
+	}
+
 	return &vaultSecrets{
-		endpoint: config.Address,
-		client:   client,
+		endpoint:    config.Address,
+		client:      client,
+		backendPath: backendPath,
 	}, nil
 }
 
@@ -80,31 +95,84 @@ func (v *vaultSecrets) String() string {
 	return Name
 }
 
+func (v *vaultSecrets) getSecretKey(secretID string, isKvV2 bool) string {
+	if isKvV2 {
+		return v.backendPath + kvDataKey + "/" + secretID
+	}
+	return v.backendPath + secretID
+}
+
+func (v *vaultSecrets) isKvBackendV2() (bool, error) {
+	mounts, err := v.client.Sys().ListMounts()
+	if err != nil {
+		return false, err
+	}
+
+	for path, mount := range mounts {
+		if path == v.backendPath {
+			version := mount.Options[kvVersionKey]
+			if version == "2" {
+				return true, nil
+			}
+			return false, nil
+		}
+	}
+
+	return false, fmt.Errorf("Secrets engine with mount path '%s' not found",
+		v.backendPath)
+}
+
 func (v *vaultSecrets) GetSecret(
-	secretId string,
+	secretID string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	secretValue, err := v.client.Logical().Read(getSecretKey(secretId))
+	isKvV2, err := v.isKvBackendV2()
 	if err != nil {
 		return nil, err
 	}
-	if secretValue == nil {
+
+	secretValue, err := v.client.Logical().Read(v.getSecretKey(secretID, isKvV2))
+	if err != nil {
+		return nil, err
+	} else if secretValue == nil {
 		return nil, secrets.ErrInvalidSecretId
 	}
-	return secretValue.Data, nil
+
+	if isKvV2 {
+		if data, exists := secretValue.Data[kvDataKey]; exists && data != nil {
+			if data, ok := data.(map[string]interface{}); ok {
+				return data, nil
+			}
+		}
+		return nil, secrets.ErrInvalidSecretId
+	} else {
+		return secretValue.Data, nil
+	}
 }
 
 func (v *vaultSecrets) PutSecret(
-	secretId string,
+	secretID string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) error {
-	_, err := v.client.Logical().Write(getSecretKey(secretId), secretData)
+	isKvV2, err := v.isKvBackendV2()
+	if err != nil {
+		return err
+	}
+
+	if isKvV2 {
+		secretData = map[string]interface{}{
+			kvDataKey: secretData,
+		}
+	}
+
+	_, err = v.client.Logical().
+		Write(v.getSecretKey(secretID, isKvV2), secretData)
 	return err
 }
 
 func (v *vaultSecrets) Encrypt(
-	secretId string,
+	secretID string,
 	plaintTextData string,
 	keyContext map[string]string,
 ) (string, error) {
@@ -112,7 +180,7 @@ func (v *vaultSecrets) Encrypt(
 }
 
 func (v *vaultSecrets) Decrypt(
-	secretId string,
+	secretID string,
 	encryptedData string,
 	keyContext map[string]string,
 ) (string, error) {
@@ -120,17 +188,13 @@ func (v *vaultSecrets) Decrypt(
 }
 
 func (v *vaultSecrets) Rencrypt(
-	originalSecretId string,
-	newSecretId string,
+	originalSecretID string,
+	newSecretID string,
 	originalKeyContext map[string]string,
 	newKeyContext map[string]string,
 	encryptedData string,
 ) (string, error) {
 	return "", secrets.ErrNotSupported
-}
-
-func getSecretKey(secretId string) string {
-	return SecretKey + secretId
 }
 
 func getVaultParam(secretConfig map[string]interface{}, name string) string {
