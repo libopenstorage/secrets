@@ -13,7 +13,6 @@ func TestAllWithDefaultBackend(t *testing.T) {
 	vs, err := NewVaultSecretTest(nil)
 	if err != nil {
 		t.Fatalf("Unable to create a Vault Secret instance: %v", err)
-		return
 	}
 	test.Run(vs, t)
 }
@@ -24,22 +23,12 @@ func TestAllWithDifferentBackend(t *testing.T) {
 		"VAULT_BACKEND_PATH": "test/secret",
 	}
 
-	s, err := New(secretConfig)
-	if err != nil {
-		t.Fatalf("Unable to create a Vault Secret instance: %v", err)
-	}
-
-	// Only verifying if the test kv backend is created or not
-	_, err = s.GetSecret("foo", nil)
-	if strings.Contains(err.Error(), "Secrets engine with mount path") {
+	vs, err := NewVaultSecretTest(secretConfig)
+	if err != nil && strings.Contains(err.Error(), "Secrets engine with mount path") {
 		t.Fatalf("Please create a kv backend with path 'test/secret' for testing\n" +
 			"`vault secrets enable [-version=2] -path=test/secret kv`")
-	}
-
-	vs, err := NewVaultSecretTest(secretConfig)
-	if err != nil {
+	} else if err != nil {
 		t.Fatalf("Unable to create a Vault Secret instance: %v", err)
-		return
 	}
 
 	test.Run(vs, t)

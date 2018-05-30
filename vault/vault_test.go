@@ -123,13 +123,31 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, "new client error", err.Error())
 	newVaultClient = oldNewClient
 
+	// error getting kv backend version
+	config = make(map[string]interface{})
+	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
+	config[api.EnvVaultToken] = "token"
+	oldIsKvV2 := isKvV2
+	isKvV2 = func(*api.Client, string) (bool, error) {
+		return false, fmt.Errorf("unable to get kv version")
+	}
+
+	_, err = New(config)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, "unable to get kv version", err.Error())
+
 	// create client without error
 	config = make(map[string]interface{})
 	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
 	config[api.EnvVaultToken] = "token"
+	isKvV2 = func(*api.Client, string) (bool, error) {
+		return true, nil
+	}
 
 	client, err := New(config)
 
 	assert.Nil(t, err)
 	assert.NotNil(t, client)
+	isKvV2 = oldIsKvV2
 }
