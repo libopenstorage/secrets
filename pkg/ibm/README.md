@@ -1,4 +1,4 @@
-The pkg ibm is provides a golang REST client to talk with IBM's Key Protect Service.
+The pkg ibm provides a golang REST client to talk with IBM's Key Protect Service.
 It has been provided to us by the IKS team.
 Thanks to Karna Bojjireddy (karub@us.ibm.com) and Sandip Amin (samin@us.ibm.com) for providing this library.
 

@@ -53,7 +53,7 @@ type ibmKPSecret struct {
 func New(
 	secretConfig map[string]interface{},
 ) (secrets.Secrets, error) {
-	if secretConfig == nil {
+	if len(secretConfig) == 0 {
 		return nil, ErrIbmServiceApiKeyNotSet
 	}
 	v, _ := secretConfig[IbmCustomerRootKey]
@@ -76,10 +76,13 @@ func New(
 	v, ok := secretConfig[IbmKvdbKey]
 	if ok {
 		kv, ok = v.(kvdb.Kvdb)
-		if !ok {
+		if !ok || kv == nil {
 			return nil, ErrInvalidKvdbProvided
 		}
+	} else {
+		return nil, ErrInvalidKvdbProvided
 	}
+
 	ps := store.NewKvdbPersistenceStore(kv, kvdbPublicBasePath, kvdbDataBasePath)
 
 	v, _ = secretConfig[IbmBaseUrlKey]

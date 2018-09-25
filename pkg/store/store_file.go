@@ -14,7 +14,7 @@ const (
 
 var (
 	// ErrInvalidRequest is returned when a request to get/put SecretData is made without configuring KVDB as a persistence store.
-	ErrInvalidRequest = errors.New("Storing secret data is supported in AWS KMS only if provided with kvdb as persistence store.")
+	ErrInvalidRequest = errors.New("Storing secret data is supported in Secrets only if provided with kvdb as persistence store.")
 )
 
 func NewFilePersistenceStore() PersistenceStore {
