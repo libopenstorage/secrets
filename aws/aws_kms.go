@@ -1,16 +1,9 @@
 package aws
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -18,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/libopenstorage/secrets"
 	sc "github.com/libopenstorage/secrets/aws/credentials"
+	"github.com/libopenstorage/secrets/pkg/store"
 	"github.com/portworx/kvdb"
 )
 
@@ -35,11 +29,9 @@ const (
 	// AwsCMKey defines the KMS customer master key
 	AwsCMKey = "AWS_CMK"
 	// KMSKvdbKey is used to setup AWS KMS Secret Store with kvdb for persistence.
-	KMSKvdbKey               = "KMS_KVDB"
-	kvdbPublicBasePath       = "aws_kms/secrets/public/"
-	kvdbDataBasePath         = "aws_kms/secrets/data/"
-	filePersistenceStoreName = "filePersistenceStore"
-	kvdbPersistenceStoreName = "kvdbPersistenceStore"
+	KMSKvdbKey         = "KMS_KVDB"
+	kvdbPublicBasePath = "aws_kms/secrets/public/"
+	kvdbDataBasePath   = "aws_kms/secrets/data/"
 )
 
 var (
@@ -55,8 +47,6 @@ var (
 	ErrAWSRegionNotProvided = errors.New("AWS Region not provided. Cannot perform KMS operations.")
 	// ErrInvalidKvdbProvided is returned when an incorrect KVDB implementation is provided for persistence store.
 	ErrInvalidKvdbProvided = errors.New("Invalid kvdb provided. AWS KMS works in conjuction with a kvdb")
-	// ErrInvalidRequest is returned when a request to get/put SecretData is made without configuring KVDB as a persistence store.
-	ErrInvalidRequest = errors.New("Storing secret data is supported in AWS KMS only if provided with kvdb as persistence store.")
 )
 
 type awsKmsSecrets struct {
@@ -66,185 +56,6 @@ type awsKmsSecrets struct {
 	cmk    string
 	asc    sc.AWSCredentials
 	ps     persistenceStore
-}
-
-type persistenceStore interface {
-	// getPublic returns the persisted aws kms public info
-	// of the given secretId
-	getPublic(secretId string) ([]byte, error)
-
-	// getSecretData returns the encrypted persisted secretData
-	// if it exists for the given secretId
-	getSecretData(secretId string, plain []byte) (map[string]interface{}, error)
-
-	// exists checks if the given secretId already
-	// exists
-	exists(secretId string) (bool, error)
-
-	// set persists the aws kms public info and encyrpted secretData if provided
-	// for the given secretId
-	set(secretId string, cipher, plain []byte, secretData map[string]interface{}) error
-
-	// name returns the name of persistence store
-	name() string
-}
-
-type filePersistenceStore struct{}
-
-func (f *filePersistenceStore) getPublic(secretId string) ([]byte, error) {
-	var path string
-
-	path = secrets.SecretPath + secretId
-	return ioutil.ReadFile(path)
-}
-
-func (f *filePersistenceStore) getSecretData(
-	secretId string,
-	plain []byte,
-) (map[string]interface{}, error) {
-	return nil, ErrInvalidRequest
-}
-
-func (f *filePersistenceStore) set(
-	secretId string,
-	cipher []byte,
-	plain []byte,
-	secretData map[string]interface{},
-) error {
-	if secretData != nil {
-		return ErrInvalidRequest
-	}
-
-	path := secrets.SecretPath + secretId
-	os.MkdirAll(secrets.SecretPath, 0700)
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	_, err = file.Write(cipher)
-	return err
-}
-
-func (f *filePersistenceStore) exists(secretId string) (bool, error) {
-	path := secrets.SecretPath + secretId
-	if checkValidPath(path) {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (f *filePersistenceStore) name() string {
-	return filePersistenceStoreName
-}
-
-type kvdbPersistenceStore struct {
-	kv kvdb.Kvdb
-}
-
-func (k *kvdbPersistenceStore) getPublic(secretId string) ([]byte, error) {
-	key := kvdbPublicBasePath + secretId
-
-	// Get the public cipher
-	kvp, err := k.kv.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	decodedCipherBlob, err := base64.StdEncoding.DecodeString(string(kvp.Value))
-	if err != nil {
-		return nil, err
-	}
-	return decodedCipherBlob, nil
-}
-
-func (k *kvdbPersistenceStore) getSecretData(
-	secretId string,
-	plain []byte,
-) (map[string]interface{}, error) {
-	dataKey := kvdbDataBasePath + secretId
-
-	// Check if there exists a key
-	kvp, err := k.kv.Get(dataKey)
-	if err == kvdb.ErrNotFound {
-		return nil, nil
-	} else if err != nil {
-		return nil, err
-	}
-
-	// base4 decode the encrypted data stored in kvdb.
-	decodedEncryptedData, err := base64.StdEncoding.DecodeString(string(kvp.Value))
-	if err != nil {
-		return nil, err
-	}
-
-	// decrypt the encrypted data.
-	decryptedData, err := decrypt(decodedEncryptedData, plain)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to decrypt secret data: %v", err)
-	}
-
-	secretData := make(map[string]interface{})
-	// unmarshal the data into a map
-	err = json.Unmarshal(decryptedData, &secretData)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal decrypted secret data: %v", err)
-	}
-	return secretData, nil
-}
-
-func (k *kvdbPersistenceStore) set(
-	secretId string,
-	cipher []byte,
-	plain []byte,
-	secretData map[string]interface{},
-) error {
-	key := kvdbPublicBasePath + secretId
-	encodeCipher := base64.StdEncoding.EncodeToString(cipher)
-	// Save the public cipher
-	_, err := k.kv.Put(key, encodeCipher, 0)
-	if err != nil {
-		return err
-	}
-	if secretData == nil {
-		return nil
-	}
-
-	// marshal the input map into a byte array
-	data, err := json.Marshal(&secretData)
-	if err != nil {
-		return err
-	}
-
-	// Use the plaintext cipher to encrypt the
-	// marshalled secretData
-	encryptedData, err := encrypt(data, plain)
-	if err != nil {
-		return err
-	}
-
-	// encode the encrypted data and store it in kvdb
-	encodedEncryptedData := base64.StdEncoding.EncodeToString(encryptedData)
-
-	dataKey := kvdbDataBasePath + secretId
-	_, err = k.kv.Put(dataKey, encodedEncryptedData, 0)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (k *kvdbPersistenceStore) exists(secretId string) (bool, error) {
-	key := kvdbPublicBasePath + secretId
-	_, err := k.kv.Get(key)
-	if err == nil {
-		return true, nil
-	} else if err == kvdb.ErrNotFound {
-		return false, nil
-	}
-	return false, err
-}
-
-func (k *kvdbPersistenceStore) name() string {
-	return kvdbPersistenceStoreName
 }
 
 func New(
@@ -271,9 +82,9 @@ func New(
 		if !ok {
 			return nil, ErrInvalidKvdbProvided
 		}
-		ps = &kvdbPersistenceStore{kv}
+		ps = store.NewKvdbPersistenceStore(kv, kvdbPublicBasePath, kvdbDataBasePath)
 	} else {
-		ps = &filePersistenceStore{}
+		ps = store.NewFilePersistenceStore()
 	}
 
 	id, secret, token, err := authKeys(secretConfig)
@@ -317,13 +128,13 @@ func (a *awsKmsSecrets) GetSecret(
 		secretData                    map[string]interface{}
 	)
 
-	if exists, err := a.ps.exists(secretId); err != nil {
+	if exists, err := a.ps.Exists(secretId); err != nil {
 		return nil, err
 	} else if !exists {
 		return nil, secrets.ErrInvalidSecretId
 	}
 
-	cipherBlob, err := a.ps.getPublic(secretId)
+	cipherBlob, err := a.ps.GetPublic(secretId)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +160,7 @@ func (a *awsKmsSecrets) GetSecret(
 
 	// check if kvdbPersistenceStore has any secretData stored for this
 	// secretId
-	secretData, err = a.ps.getSecretData(secretId, output.Plaintext)
+	secretData, err = a.ps.GetSecretData(secretId, output.Plaintext)
 	if err != nil {
 		return nil, err
 	} else if secretData != nil {
@@ -380,7 +191,7 @@ func (a *awsKmsSecrets) PutSecret(
 		return err
 	}
 
-	return a.ps.set(
+	return a.ps.Set(
 		secretId,
 		output.CiphertextBlob,
 		output.Plaintext,
@@ -454,59 +265,6 @@ func getAWSKeyContext(keyContext map[string]string) map[string]*string {
 		encKeyContext[k] = &v
 	}
 	return encKeyContext
-}
-
-func checkValidPath(path string) bool {
-	if _, err := os.Stat(path); err == nil {
-		return true
-	}
-	return false
-
-}
-
-// encrypt encrypts the data using the passphrase
-func encrypt(data, passphrase []byte) ([]byte, error) {
-	gcm, err := getGCM(passphrase)
-	if err != nil {
-		return nil, err
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
-
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
-
-	return gcm.Seal(nonce, nonce, data, nil), nil
-}
-
-// decrypt decrypts the cipherData using the passphrase
-func decrypt(cipherData, passphrase []byte) ([]byte, error) {
-	gcm, err := getGCM(passphrase)
-	if err != nil {
-		return nil, err
-	}
-
-	nonceSize := gcm.NonceSize()
-
-	if len(cipherData) < nonceSize {
-		return nil, errors.New("ciphertext too short")
-	}
-
-	nonce, cipherData := cipherData[:nonceSize], cipherData[nonceSize:]
-	decryptedData, err := gcm.Open(cipherData[:0], nonce, cipherData, nil)
-	return decryptedData, err
-}
-
-// getGCM returns golang's AEAD, a cipher mode for AES encryption
-// using Galois/Counter Mode (GCM)
-func getGCM(passphrase []byte) (cipher.AEAD, error) {
-	c, err := aes.NewCipher(passphrase)
-	if err != nil {
-		return nil, err
-	}
-
-	return cipher.NewGCM(c)
 }
 
 func init() {
