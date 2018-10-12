@@ -8,6 +8,7 @@ import (
 	"github.com/libopenstorage/secrets/test"
 	"github.com/portworx/kvdb"
 	"github.com/portworx/kvdb/mem"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -64,26 +65,18 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 	secretData["key2"] = "value2"
 	// PutSecret with non-nil secretData
 	err := a.s.PutSecret(secretIdWithData, secretData, nil)
-	if err != nil && err != ErrInvalidRequest {
-		t.Errorf("Expected PutSecret to not fail.: %v", err)
-	}
+	assert.NoError(t, err, "Unepxected error on PutSecret")
 
 	// PutSecret with nil secretData
 	err = a.s.PutSecret(secretIdWithoutData, nil, nil)
-	if err != nil {
-		t.Errorf("Expected PutSecret to succeed. Failed with error: %v", err)
-	}
+	assert.NoError(t, err, "Expected PutSecret to succeed. Failed with error: %v", err)
 
 	// PutSecret with already existing secretId
 	err = a.s.PutSecret(secretIdWithData, secretData, nil)
-	if err != nil && err != ErrInvalidRequest {
-		t.Errorf("Expected PutSecret to fail with ErrSecretExists error")
-	}
+	assert.EqualError(t, secrets.ErrSecretExists, err.Error(), "Expected PutSecret to fail with ErrSecretExists error")
 
 	err = a.s.PutSecret(secretIdWithoutData, nil, nil)
-	if err != nil {
-		t.Errorf("Expected PutSecret to fail with ErrSecretExists error")
-	}
+	assert.EqualError(t, secrets.ErrSecretExists, err.Error(), "Expected PutSecret to fail with ErrSecretExists error")
 
 	return nil
 }
@@ -91,36 +84,35 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 func (a *awsSecretTest) TestGetSecret(t *testing.T) error {
 	// GetSecret with non-existant id
 	_, err := a.s.GetSecret("dummy", nil)
-	if err == nil {
-		t.Errorf("Expected GetSecret to fail. Invalid secretId")
-	}
+	assert.Error(t, err, "Expected GetSecret to fail")
 
 	// GetSecret using a secretId with data
 	plainText1, err := a.s.GetSecret(secretIdWithData, nil)
-	if err != nil && err != secrets.ErrInvalidSecretId {
-		t.Errorf("Expected GetSecret to succeed. Failed with error: %v", err)
-	} else if err == nil {
-		// We have got secretData
-		if plainText1 == nil {
-			t.Errorf("Invalid PlainText was returned")
-		}
-		v, ok := plainText1["key1"]
-		if !ok {
-			t.Errorf("Unexpected secretData")
-		}
-		str, ok := v.(string)
-		if !ok {
-			t.Errorf("Unexpected secretData")
-		}
-		if str != "value1" {
-			t.Errorf("Unexpected secretData")
-		}
-	}
+	assert.NoError(t, err, "Expected GetSecret to succeed")
+	assert.NotNil(t, plainText1, "Expected plainText to not be nil")
+	v, ok := plainText1["key1"]
+	assert.True(t, ok, "Unexpected secretData")
+	str, ok := v.(string)
+	assert.True(t, ok, "Unexpected secretData")
+	assert.Equal(t, str, "value1", "Unexpected secretData")
 
 	// GetSecret using a secretId without data
 	_, err = a.s.GetSecret(secretIdWithoutData, nil)
-	if err != nil {
-		t.Errorf("Expected GetSecret to succeed. Failed with error: %v", err)
-	}
+	assert.NoError(t, err, "Expected GetSecret to succeed")
+	return nil
+}
+
+func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
+	// Delete of a key that exists should succeed
+	err := a.s.DeleteSecret(secretIdWithData, nil)
+	assert.NoError(t, err, "Expected DeleteSecret to succeed")
+
+	// Get of a deleted key should fail
+	_, err = a.s.GetSecret(secretIdWithData, nil)
+	assert.EqualError(t, ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret after delete")
+
+	// Delete of a non-existent key should also succeed
+	err = a.s.DeleteSecret("dummy", nil)
+	assert.NoError(t, err, "Unexpected error on DeleteSecret")
 	return nil
 }

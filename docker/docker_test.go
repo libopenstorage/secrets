@@ -60,3 +60,7 @@ func (d *dockerSecretTest) TestGetSecret(t *testing.T) error {
 
 	return nil
 }
+
+func (d *dockerSecretTest) TestDeleteSecret(t *testing.T) error {
+	return nil
+}

@@ -13,18 +13,12 @@ import (
 )
 
 const (
-	testSecretId = "openstorage_secret"
+	testSecretIdWithPassphrase = "openstorage_secret_with_passphrase"
+	testSecretId               = "openstorage_secret"
 )
 
 func TestAll(t *testing.T) {
-	// Set the relevant environment fields for ibm kp.
 	secretConfig := make(map[string]interface{})
-	// Fill in the appropriate keys and values
-	secretConfig[IbmServiceApiKey] = os.Getenv(IbmServiceApiKey)
-	secretConfig[IbmInstanceIdKey] = os.Getenv(IbmInstanceIdKey)
-	secretConfig[IbmCustomerRootKey] = os.Getenv(IbmCustomerRootKey)
-	secretConfig[IbmBaseUrlKey] = os.Getenv(IbmBaseUrlKey)
-	secretConfig[IbmTokenUrlKey] = os.Getenv(IbmTokenUrlKey)
 
 	// With kvdbPersistenceStore
 	kv, err := kvdb.New(mem.Name, "openstorage/", nil, nil, nil)
@@ -48,72 +42,85 @@ type ibmSecretTest struct {
 }
 
 func (i *ibmSecretTest) TestPutSecret(t *testing.T) error {
-
 	secretData := make(map[string]interface{})
 	i.passphrase = uuid.New()
-	secretData[testSecretId] = i.passphrase
+	secretData[testSecretIdWithPassphrase] = i.passphrase
 	// PutSecret with non-nil secretData
-	err := i.s.PutSecret(testSecretId, secretData, nil)
-	if err != nil {
-		t.Errorf("Expected PutSecret to not fail.: %v", err)
-	}
+	err := i.s.PutSecret(testSecretIdWithPassphrase, secretData, nil)
+	assert.NoError(t, err, "Unexpected error on PutSecret")
 
 	// PutSecret with nil secretData
 	err = i.s.PutSecret(testSecretId, nil, nil)
-	if err == nil {
-		t.Errorf("Expected PutSecret to return with an error")
-	}
+	assert.NoError(t, err, "Unexpected error on PutSecret")
 
 	// PutSecret with already existing secretId
 	err = i.s.PutSecret(testSecretId, secretData, nil)
-	if err != nil {
-		t.Errorf("Expected PutSecret to fail with ErrSecretExists error")
-	}
-
+	assert.EqualError(t, secrets.ErrSecretExists, err.Error(), "Expected PutSecret to fail")
 	return nil
 }
 
 func (i *ibmSecretTest) TestGetSecret(t *testing.T) error {
 	// GetSecret with non-existant id
 	_, err := i.s.GetSecret("dummy", nil)
-	if err == nil {
-		t.Errorf("Expected GetSecret to fail. Invalid secretId")
-	}
+	assert.Error(t, err, "Expected GetSecret to fail")
 
 	// GetSecret using a secretId with data
-	plainText1, err := i.s.GetSecret(testSecretId, nil)
-	if err != nil && err != secrets.ErrInvalidSecretId {
-		t.Errorf("Expected GetSecret to succeed. Failed with error: %v", err)
-	} else if err == nil {
-		// We have got secretData
-		if plainText1 == nil {
-			t.Errorf("Invalid PlainText was returned")
-		}
-		v, ok := plainText1[testSecretId]
-		if !ok {
-			t.Errorf("Unexpected secretData")
-		}
-		str, ok := v.(string)
-		if !ok {
-			t.Errorf("Unexpected secretData")
-		}
-		if str != i.passphrase {
-			t.Errorf("Unexpected secretData")
-		}
-	}
+	plainText1, err := i.s.GetSecret(testSecretIdWithPassphrase, nil)
+	assert.NoError(t, err, "Unexpected error on GetSecret")
+	// We have got secretData
+	assert.NotNil(t, plainText1, "Invalid plainText was returned")
+	v, ok := plainText1[testSecretIdWithPassphrase]
+	assert.True(t, ok, "Unexpected plainText")
+	str, ok := v.(string)
+	assert.True(t, ok, "Unexpected plainText")
+	assert.Equal(t, str, i.passphrase, "Unexpected passphrase")
+	return nil
+}
+
+func (i *ibmSecretTest) TestDeleteSecret(t *testing.T) error {
+	// Delete of a key that exists should succeed
+	err := i.s.DeleteSecret(testSecretId, nil)
+	assert.NoError(t, err, "Unexpected error on DeleteSecret")
+
+	// Get of a deleted key should fail
+	_, err = i.s.GetSecret(testSecretId, nil)
+	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Expected an error on GetSecret after the key is deleted")
+
+	// Delete of a non-existent key should also succeed
+	err = i.s.DeleteSecret("dummy", nil)
+	assert.NoError(t, err, "Unepxected error on DeleteSecret")
 	return nil
 }
 
 func TestNew(t *testing.T) {
+	os.Unsetenv(IbmServiceApiKey)
+	os.Unsetenv(IbmInstanceIdKey)
+	os.Unsetenv(IbmCustomerRootKey)
 	// nil secret config
 	_, err := New(nil)
-	assert.EqualError(t, err, ErrIbmServiceApiKeyNotSet.Error(), "Unexpected error on nil secret config")
+	assert.EqualError(t, err, ErrInvalidKvdbProvided.Error(), "Unexpected error on nil secret config")
 
 	// empty secret config
 	secretConfig := make(map[string]interface{})
 	_, err = New(secretConfig)
-	assert.EqualError(t, err, ErrIbmServiceApiKeyNotSet.Error(), "Unexpected error on empty secret config")
+	assert.EqualError(t, err, ErrInvalidKvdbProvided.Error(), "Unexpected error on empty secret config")
 
+	// kvdb key is incorrect
+	secretConfig[IbmKvdbKey] = "dummy"
+	_, err = New(secretConfig)
+	assert.EqualError(t, err, ErrInvalidKvdbProvided.Error(), "Unepxected error when Kvdb Key not provided")
+
+	// With kvdbPersistenceStore
+	kv, err := kvdb.New(mem.Name, "openstorage/", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Unable to create a IBM Key Protect Secret instance: %v", err)
+		return
+	}
+
+	// kvdb key is correct
+	secretConfig[IbmKvdbKey] = kv
+	kp, err := New(secretConfig)
+	assert.EqualError(t, err, ErrCRKNotProvided.Error(), "Unepxected error when Kvdb Key not provided")
 	// crk not provided
 	secretConfig[IbmServiceApiKey] = "foo"
 	secretConfig[IbmInstanceIdKey] = "bar"
@@ -134,24 +141,7 @@ func TestNew(t *testing.T) {
 
 	// kvdb key not provided
 	secretConfig[IbmInstanceIdKey] = "bar"
-	_, err = New(secretConfig)
-	assert.EqualError(t, err, ErrInvalidKvdbProvided.Error(), "Unepxected error when Kvdb Key not provided")
-
-	// kvdb key is incorrect
-	secretConfig[IbmKvdbKey] = "dummy"
-	_, err = New(secretConfig)
-	assert.EqualError(t, err, ErrInvalidKvdbProvided.Error(), "Unepxected error when Kvdb Key not provided")
-
-	// With kvdbPersistenceStore
-	kv, err := kvdb.New(mem.Name, "openstorage/", nil, nil, nil)
-	if err != nil {
-		t.Fatalf("Unable to create a IBM Key Protect Secret instance: %v", err)
-		return
-	}
-
-	// kvdb key is correct
-	secretConfig[IbmKvdbKey] = kv
-	kp, err := New(secretConfig)
+	kp, err = New(secretConfig)
 	assert.NotNil(t, kp, "Expected New API to succeed")
 	assert.NoError(t, err, "Unepxected error on New")
 

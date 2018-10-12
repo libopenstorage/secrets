@@ -30,8 +30,9 @@ func TestAll(t *testing.T) {
 	secretConfig[KeyDcosURL] = os.Getenv("DCOS_SECRETS_TEST_CLUSTER_URL")
 
 	ds, err := NewDCOSSecretTest(secretConfig)
-
-	assert.Nil(t, err)
+	if err != nil {
+		t.Fatalf("Unable to create a dcos secrets client: %v", err)
+	}
 
 	test.Run(ds, t)
 }
@@ -80,5 +81,9 @@ func (d *dcosSecretTest) TestGetSecret(t *testing.T) error {
 	assert.Equal(t, "bar", secretData["foo"])
 	assert.Equal(t, float64(10), secretData["count"])
 
+	return nil
+}
+
+func (d *dcosSecretTest) TestDeleteSecret(t *testing.T) error {
 	return nil
 }
