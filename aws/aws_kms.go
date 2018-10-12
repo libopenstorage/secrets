@@ -55,7 +55,7 @@ type awsKmsSecrets struct {
 	sess   *session.Session
 	cmk    string
 	asc    sc.AWSCredentials
-	ps     persistenceStore
+	ps     store.PersistenceStore
 }
 
 func New(
@@ -64,7 +64,7 @@ func New(
 	if secretConfig == nil {
 		return nil, ErrCMKNotProvided
 	}
-	var ps persistenceStore
+	var ps store.PersistenceStore
 
 	v, _ := secretConfig[AwsCMKey]
 	cmk, _ := v.(string)
@@ -154,7 +154,7 @@ func (a *awsKmsSecrets) GetSecret(
 	}
 
 	// filePersistenceStore does not support storing of secretData
-	if a.ps.name() == filePersistenceStoreName {
+	if a.ps.Name() == store.FilePersistenceStoreName {
 		goto return_plaintext
 	}
 
@@ -197,6 +197,13 @@ func (a *awsKmsSecrets) PutSecret(
 		output.Plaintext,
 		secretData,
 	)
+}
+
+func (a *awsKmsSecrets) DeleteSecret(
+	secretId string,
+	keyContext map[string]string,
+) error {
+	return a.ps.Delete(secretId)
 }
 
 func (a *awsKmsSecrets) Encrypt(

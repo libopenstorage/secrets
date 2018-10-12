@@ -43,6 +43,13 @@ type Secrets interface {
 		keyContext map[string]string,
 	) error
 
+	// DeleteSecret deletes the secret data associated with the
+	// supplied secretId.
+	DeleteSecret(
+		secretId string,
+		keyContext map[string]string,
+	) error
+
 	// Encrypt encrypts the supplied plain text data using the given key.
 	// The API would fetch the plain text key, encrypt the data with it.
 	// The plain text key will not be stored anywhere else and would be

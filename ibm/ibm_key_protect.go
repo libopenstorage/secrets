@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"os"
 
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/pkg/ibm"
@@ -53,26 +54,9 @@ type ibmKPSecret struct {
 func New(
 	secretConfig map[string]interface{},
 ) (secrets.Secrets, error) {
-	if len(secretConfig) == 0 {
-		return nil, ErrIbmServiceApiKeyNotSet
-	}
-	v, _ := secretConfig[IbmCustomerRootKey]
-	crk, _ := v.(string)
-	if crk == "" {
-		return nil, ErrCRKNotProvided
-	}
-	v, _ = secretConfig[IbmServiceApiKey]
-	serviceApiKey, _ := v.(string)
-	if serviceApiKey == "" {
-		return nil, ErrIbmServiceApiKeyNotSet
-	}
-	v, _ = secretConfig[IbmInstanceIdKey]
-	instanceId, _ := v.(string)
-	if instanceId == "" {
-		return nil, ErrIbmInstanceIdKeyNotSet
-	}
-
-	var kv kvdb.Kvdb
+	var (
+		kv kvdb.Kvdb
+	)
 	v, ok := secretConfig[IbmKvdbKey]
 	if ok {
 		kv, ok = v.(kvdb.Kvdb)
@@ -85,14 +69,27 @@ func New(
 
 	ps := store.NewKvdbPersistenceStore(kv, kvdbPublicBasePath, kvdbDataBasePath)
 
-	v, _ = secretConfig[IbmBaseUrlKey]
-	baseUrl, _ := v.(string)
+	crk := getIbmParam(secretConfig, IbmCustomerRootKey)
+	if crk == "" {
+		return nil, ErrCRKNotProvided
+	}
+
+	serviceApiKey := getIbmParam(secretConfig, IbmServiceApiKey)
+	if serviceApiKey == "" {
+		return nil, ErrIbmServiceApiKeyNotSet
+	}
+
+	instanceId := getIbmParam(secretConfig, IbmInstanceIdKey)
+	if instanceId == "" {
+		return nil, ErrIbmInstanceIdKeyNotSet
+	}
+
+	baseUrl := getIbmParam(secretConfig, IbmBaseUrlKey)
 	if baseUrl == "" {
 		baseUrl = ibm.DefaultBaseURL
 	}
 
-	v, _ = secretConfig[IbmTokenUrlKey]
-	tokenUrl, _ := v.(string)
+	tokenUrl := getIbmParam(secretConfig, IbmTokenUrlKey)
 	if tokenUrl == "" {
 		tokenUrl = ibm.DefaultTokenURL
 	}
@@ -157,22 +154,38 @@ func (i *ibmKPSecret) PutSecret(
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) error {
-	if len(secretData) == 0 {
-		return ErrInvalidSecretData
-	}
-	v, _ := secretData[secretId]
-	passphrase := v.(string)
-	if passphrase == "" {
-		return ErrInvalidSecretData
-	}
-
-	encodedPassphrase := base64.StdEncoding.EncodeToString([]byte(passphrase))
-	dek, err := i.kp.Wrap(
-		context.Background(),
-		i.crk,
-		[]byte(encodedPassphrase),
-		nil,
+	var (
+		dek []byte
+		err error
 	)
+	exists, err := i.ps.Exists(secretId)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return secrets.ErrSecretExists
+	}
+	if len(secretData) > 0 {
+		v, _ := secretData[secretId]
+		passphrase, _ := v.(string)
+		if passphrase == "" {
+			return ErrInvalidSecretData
+		}
+
+		encodedPassphrase := base64.StdEncoding.EncodeToString([]byte(passphrase))
+		dek, err = i.kp.Wrap(
+			context.Background(),
+			i.crk,
+			[]byte(encodedPassphrase),
+			nil,
+		)
+	} else {
+		_, dek, err = i.kp.WrapCreateDEK(
+			context.Background(),
+			i.crk,
+			nil,
+		)
+	}
 	if err != nil {
 		return err
 	}
@@ -182,6 +195,13 @@ func (i *ibmKPSecret) PutSecret(
 		nil,
 		nil,
 	)
+}
+
+func (i *ibmKPSecret) DeleteSecret(
+	secretId string,
+	keyContext map[string]string,
+) error {
+	return i.ps.Delete(secretId)
 }
 
 func (i *ibmKPSecret) Encrypt(
@@ -208,6 +228,14 @@ func (i *ibmKPSecret) Rencrypt(
 	encryptedData string,
 ) (string, error) {
 	return "", secrets.ErrNotSupported
+}
+
+func getIbmParam(secretConfig map[string]interface{}, name string) string {
+	if tokenIntf, exists := secretConfig[name]; exists {
+		return tokenIntf.(string)
+	} else {
+		return os.Getenv(name)
+	}
 }
 
 func init() {

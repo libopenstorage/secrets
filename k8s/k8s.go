@@ -77,6 +77,18 @@ func (s *k8sSecrets) PutSecret(
 	return err
 }
 
+func (s *k8sSecrets) DeleteSecret(
+	secretName string,
+	keyContext map[string]string,
+) error {
+	namespace, exists := keyContext[SecretNamespace]
+	if !exists {
+		return fmt.Errorf("Namespace cannot be empty.")
+	}
+
+	return k8s.Instance().DeleteSecret(secretName, namespace)
+}
+
 func (s *k8sSecrets) Encrypt(
 	secretId string,
 	plaintTextData string,

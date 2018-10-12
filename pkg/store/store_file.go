@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	filePersistenceStoreName = "filePersistenceStore"
+	FilePersistenceStoreName = "filePersistenceStore"
 )
 
 var (
@@ -65,8 +65,17 @@ func (f *filePersistenceStore) Exists(secretId string) (bool, error) {
 	return false, nil
 }
 
+func (f *filePersistenceStore) Delete(secretId string) error {
+	path := secrets.SecretPath + secretId
+	exists, _ := f.Exists(secretId)
+	if !exists {
+		return nil
+	}
+	return os.Remove(path)
+}
+
 func (f *filePersistenceStore) Name() string {
-	return filePersistenceStoreName
+	return FilePersistenceStoreName
 }
 
 func checkValidPath(path string) bool {
