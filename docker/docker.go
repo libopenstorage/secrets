@@ -61,6 +61,13 @@ func (v *dockerSecrets) PutSecret(
 	return secrets.ErrNotSupported
 }
 
+func (v *dockerSecrets) DeleteSecret(
+	secretId string,
+	keyContext map[string]string,
+) error {
+	return secrets.ErrNotSupported
+}
+
 func (v *dockerSecrets) Encrypt(
 	secretId string,
 	plaintTextData string,

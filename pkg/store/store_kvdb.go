@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	kvdbPersistenceStoreName = "kvdbPersistenceStore"
+	KvdbPersistenceStoreName = "kvdbPersistenceStore"
 )
 
 func NewKvdbPersistenceStore(
@@ -139,8 +139,17 @@ func (k *kvdbPersistenceStore) Exists(secretId string) (bool, error) {
 	return false, err
 }
 
+func (k *kvdbPersistenceStore) Delete(secretId string) error {
+	key := k.kvdbPublicBasePath + secretId
+	_, err := k.kv.Delete(key)
+	if err == nil || err == kvdb.ErrNotFound {
+		return nil
+	}
+	return err
+}
+
 func (k *kvdbPersistenceStore) Name() string {
-	return kvdbPersistenceStoreName
+	return KvdbPersistenceStoreName
 }
 
 // encrypt encrypts the data using the passphrase

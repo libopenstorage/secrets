@@ -142,6 +142,13 @@ func (d *dcosSecrets) PutSecret(
 	return d.client.CreateOrUpdateSecret(keyContext[KeySecretStore], secretPath, secret)
 }
 
+func (d *dcosSecrets) DeleteSecret(
+	secretPath string,
+	keyContext map[string]string,
+) error {
+	return d.client.DeleteSecret(keyContext[KeySecretStore], secretPath)
+}
+
 func (d *dcosSecrets) Encrypt(
 	secretID string,
 	plainTextData string,

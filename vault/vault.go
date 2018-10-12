@@ -148,6 +148,14 @@ func (v *vaultSecrets) PutSecret(
 	return err
 }
 
+func (v *vaultSecrets) DeleteSecret(
+	secretID string,
+	keyContext map[string]string,
+) error {
+	_, err := v.client.Logical().Delete(v.getSecretKey(secretID))
+	return err
+}
+
 func (v *vaultSecrets) Encrypt(
 	secretID string,
 	plaintTextData string,

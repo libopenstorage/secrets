@@ -60,6 +60,14 @@ func (v *kvdbSecrets) PutSecret(
 	return err
 }
 
+func (v *kvdbSecrets) DeleteSecret(
+	secretId string,
+	keyContext map[string]string,
+) error {
+	_, err := v.client.Delete(SecretKey + secretId)
+	return err
+}
+
 func (v *kvdbSecrets) Encrypt(
 	encryptedKeyId string,
 	plaintTextData string,

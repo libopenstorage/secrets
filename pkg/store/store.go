@@ -17,6 +17,10 @@ type PersistenceStore interface {
 	// for the given secretId
 	Set(secretId string, cipher, plain []byte, secretData map[string]interface{}) error
 
+	// Delete deletes the kms public info and the encrypted secretData if any
+	// for the given secretId
+	Delete(secretId string) error
+
 	// Name returns the name of persistence store
 	Name() string
 }
