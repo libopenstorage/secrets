@@ -76,10 +76,20 @@ func (v *vaultSecretTest) TestPutSecret(t *testing.T) error {
 	if err == nil {
 		t.Fatalf("Expected error when no secret key present")
 	}
+
+	err = v.s.DeleteSecret(keyId, nil)
+	if err != nil {
+		t.Fatalf("Unable to delete key: %v %v", keyId, err)
+	}
 	return nil
 }
 
 func (v *vaultSecretTest) TestGetSecret(t *testing.T) error {
 	// TestPutSecret does get testing as well
+	return nil
+}
+
+func (v *vaultSecretTest) TestDeleteSecret(t *testing.T) error {
+	// TestPutSecret does delete testing as well
 	return nil
 }
