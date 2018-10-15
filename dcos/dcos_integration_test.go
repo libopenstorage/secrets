@@ -85,5 +85,17 @@ func (d *dcosSecretTest) TestGetSecret(t *testing.T) error {
 }
 
 func (d *dcosSecretTest) TestDeleteSecret(t *testing.T) error {
+	// Delete of a key that exists should succeed
+	err := d.s.DeleteSecret("osd/test/secret_with_default_store", nil)
+	assert.NoError(t, err, "Unexpected error on DeleteSecret")
+
+	// Get of a deleted key should fail
+	_, err = d.s.GetSecret("osd/test/secret_with_default_store", nil)
+	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Expected an error on GetSecret after the key is deleted")
+
+	// Delete of a non-existent key should also succeed
+	err = d.s.DeleteSecret("dummy", nil)
+	assert.NoError(t, err, "Unepxected error on DeleteSecret")
 	return nil
+
 }

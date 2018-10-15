@@ -6,6 +6,7 @@ import (
 
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/test"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAllWithDefaultBackend(t *testing.T) {
@@ -56,31 +57,21 @@ func (v *vaultSecretTest) TestPutSecret(t *testing.T) error {
 		t.Fatalf("secrets is nil")
 	}
 	err := v.s.PutSecret(keyId, data, nil)
-	if err != nil {
-		t.Fatalf("Unable to put key into secrets: %v", err)
-	}
+	assert.NoError(t, err, "Unable to put key into secrets.")
 
 	plainText, err := v.s.GetSecret(keyId, nil)
-	if err != nil {
-		t.Fatalf("Unable to get key from secrets: %v", err)
-	}
-	if len(data) != len(plainText) {
-		t.Errorf("Put and Get keys do not match")
-	}
+	assert.NoError(t, err, "Unable to get key from secrets")
+	assert.Equal(t, len(data), len(plainText), "Put and Get keys do not match")
 	for k, v := range plainText {
-		if o, exists := data[k]; !exists || o != v {
-			t.Errorf("Put and Get values do not match")
-		}
+		o, exists := data[k]
+		assert.True(t, exists, "Put and Get values do not match")
+		assert.Equal(t, o, v, "Put and Get values do not match")
 	}
 	_, err = v.s.GetSecret("unknown_key", nil)
-	if err == nil {
-		t.Fatalf("Expected error when no secret key present")
-	}
+	assert.Error(t, err, "Expected error when no secret key present")
 
 	err = v.s.DeleteSecret(keyId, nil)
-	if err != nil {
-		t.Fatalf("Unable to delete key: %v %v", keyId, err)
-	}
+	assert.NoError(t, err, "Expected no error on delete secret")
 	return nil
 }
 
