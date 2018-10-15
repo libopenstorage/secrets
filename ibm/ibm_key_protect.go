@@ -3,6 +3,7 @@ package ibm
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"os"
 
@@ -30,6 +31,10 @@ const (
 	IbmKvdbKey         = "IBM_KVDB"
 	kvdbPublicBasePath = "ibm_kp/secrets/public/"
 	kvdbDataBasePath   = "ibm_kp/secrets/data/"
+	// kpClientTimeout is the http client timeout in seconds
+	kpClientTimeout = 10
+	// CustomSecretData is a constant used as a key context in the secrets APIs
+	CustomSecretData = "custom_secret_data"
 )
 
 var (
@@ -42,7 +47,9 @@ var (
 	// ErrInvalidKvdbProvided is returned when an incorrect KVDB implementation is provided for persistence store.
 	ErrInvalidKvdbProvided = errors.New("Invalid kvdb provided. IBM Key Protect secret store works in conjuction with a kvdb")
 	// ErrInvalidSecretData is returned when no secret data is found
-	ErrInvalidSecretData = errors.New("Secret Data cannot be empty")
+	ErrInvalidSecretData = errors.New("Secret Data cannot be empty when CustomSecretData flag is set")
+	// ErrInvalidKeyContext is returned when secret data is provided without CustomSecretData key context
+	ErrInvalidKeyContext = errors.New("Secret Data cannot be provided when CustomSecretData flag is not set")
 )
 
 type ibmKPSecret struct {
@@ -100,6 +107,7 @@ func New(
 		TokenURL:   tokenUrl,
 		InstanceID: instanceId,
 		Verbose:    ibm.VerboseAll,
+		Timeout:    kpClientTimeout,
 	}
 	kp, err := ibm.NewAPIWithLogger(cc, nil, logrus.StandardLogger())
 	if err != nil {
@@ -131,7 +139,6 @@ func (i *ibmKPSecret) GetSecret(
 	if err != nil {
 		return nil, err
 	}
-
 	// Use the CRK to unwrap the DEK and get the secret passphrase
 	encodedPassphrase, err := i.kp.Unwrap(
 		context.Background(),
@@ -139,13 +146,21 @@ func (i *ibmKPSecret) GetSecret(
 		dek,
 		nil,
 	)
+	if err != nil {
+		return nil, err
+	}
 	decodedPassphrase, err := base64.StdEncoding.DecodeString(string(encodedPassphrase))
 	if err != nil {
 		return nil, err
 	}
-
 	secretData := make(map[string]interface{})
-	secretData[secretId] = string(decodedPassphrase)
+	if _, ok := keyContext[CustomSecretData]; ok {
+		if err := json.Unmarshal(decodedPassphrase, &secretData); err != nil {
+			return nil, err
+		}
+	} else {
+		secretData[secretId] = string(decodedPassphrase)
+	}
 	return secretData, nil
 }
 
@@ -165,14 +180,18 @@ func (i *ibmKPSecret) PutSecret(
 	if exists {
 		return secrets.ErrSecretExists
 	}
-	if len(secretData) > 0 {
-		v, _ := secretData[secretId]
-		passphrase, _ := v.(string)
-		if passphrase == "" {
-			return ErrInvalidSecretData
-		}
+	_, customData := keyContext[CustomSecretData]
 
-		encodedPassphrase := base64.StdEncoding.EncodeToString([]byte(passphrase))
+	if customData && len(secretData) == 0 {
+		return ErrInvalidSecretData
+	} else if len(secretData) > 0 && !customData {
+		return ErrInvalidKeyContext
+	} else if len(secretData) > 0 && customData {
+		value, err := json.Marshal(secretData)
+		if err != nil {
+			return err
+		}
+		encodedPassphrase := base64.StdEncoding.EncodeToString(value)
 		dek, err = i.kp.Wrap(
 			context.Background(),
 			i.crk,

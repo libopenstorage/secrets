@@ -45,8 +45,19 @@ func (i *ibmSecretTest) TestPutSecret(t *testing.T) error {
 	secretData := make(map[string]interface{})
 	i.passphrase = uuid.New()
 	secretData[testSecretIdWithPassphrase] = i.passphrase
-	// PutSecret with non-nil secretData
+
+	// PutSecret with non-nil secretData and no key context
 	err := i.s.PutSecret(testSecretIdWithPassphrase, secretData, nil)
+	assert.Error(t, ErrInvalidSecretData, "Expected error on PutSecret")
+
+	keyContext := make(map[string]string)
+	keyContext[CustomSecretData] = "true"
+
+	// PutSecret with nil secretData and key context
+	err = i.s.PutSecret(testSecretIdWithPassphrase, nil, keyContext)
+	assert.Error(t, ErrInvalidKeyContext, "Expected error on PutSecret")
+
+	err = i.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 
 	// PutSecret with nil secretData
@@ -65,7 +76,9 @@ func (i *ibmSecretTest) TestGetSecret(t *testing.T) error {
 	assert.Error(t, err, "Expected GetSecret to fail")
 
 	// GetSecret using a secretId with data
-	plainText1, err := i.s.GetSecret(testSecretIdWithPassphrase, nil)
+	keyContext := make(map[string]string)
+	keyContext[CustomSecretData] = "true"
+	plainText1, err := i.s.GetSecret(testSecretIdWithPassphrase, keyContext)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
 	// We have got secretData
 	assert.NotNil(t, plainText1, "Invalid plainText was returned")
@@ -74,6 +87,10 @@ func (i *ibmSecretTest) TestGetSecret(t *testing.T) error {
 	str, ok := v.(string)
 	assert.True(t, ok, "Unexpected plainText")
 	assert.Equal(t, str, i.passphrase, "Unexpected passphrase")
+
+	// GetSecret using a secretId without data
+	_, err = i.s.GetSecret(testSecretId, nil)
+	assert.NoError(t, err, "Unexpected error on GetSecret")
 	return nil
 }
 
