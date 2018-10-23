@@ -377,16 +377,20 @@ func (a *API) sendRequest(request *http.Request, requestBody []byte, responseBod
 	default:
 		if strings.Contains(string(resBody), "errorMsg") {
 			kperr := KPError{}
-			json.Unmarshal(resBody, &kperr)
-			if len(kperr.Resources) > 0 && len(kperr.Resources[0].Message) > 0 {
+			err := json.Unmarshal(resBody, &kperr)
+			if err == nil && len(kperr.Resources) > 0 && len(kperr.Resources[0].Message) > 0 {
 				return errors.New(kperr.Resources[0].Message)
+			} else {
+				return err
 			}
 		}
 		if strings.Contains(string(resBody), "errorCode") {
 			iamerr := IAMError{}
-			json.Unmarshal(resBody, &iamerr)
-			if len(iamerr.Message) > 0 {
+			err := json.Unmarshal(resBody, &iamerr)
+			if err == nil && len(iamerr.Message) > 0 {
 				return fmt.Errorf("%s:%s", iamerr.Code, iamerr.Message)
+			} else {
+				return err
 			}
 		}
 		return errors.New(string(resBody))
