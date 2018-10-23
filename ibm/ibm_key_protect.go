@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/pkg/ibm"
@@ -147,7 +149,7 @@ func (i *ibmKPSecret) GetSecret(
 		nil,
 	)
 	if err != nil {
-		return nil, err
+		return nil, handleError(err)
 	}
 	decodedPassphrase, err := base64.StdEncoding.DecodeString(string(encodedPassphrase))
 	if err != nil {
@@ -206,7 +208,7 @@ func (i *ibmKPSecret) PutSecret(
 		)
 	}
 	if err != nil {
-		return err
+		return handleError(err)
 	}
 	return i.ps.Set(
 		secretId,
@@ -255,6 +257,24 @@ func getIbmParam(secretConfig map[string]interface{}, name string) string {
 	} else {
 		return os.Getenv(name)
 	}
+}
+
+func handleError(err error) error {
+	// Strip the keys and CRK from the error Output
+	// TODO: This needs to be handled at the IBM SDK level
+	// Once the SDK is updated this code will be removed.
+	// An example error looks like this
+	// Post https://keyprotect.us-south.bluemix.net/api/v2/keys/<crk>?action=wrap: net/http: request canceled while waiting for connection (Client.Timeout exceeded while awaiting headers)""
+	if strings.Contains(err.Error(), "api/v2/keys") {
+		errTokens := strings.Split(err.Error(), "?")
+		if len(errTokens) > 1 {
+			return fmt.Errorf("ibm error: %v", errTokens[1])
+		} else {
+			// unable to parse the errors
+			return fmt.Errorf("ibm error: cannot perform requested action")
+		}
+	}
+	return err
 }
 
 func init() {
