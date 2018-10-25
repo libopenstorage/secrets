@@ -19,9 +19,17 @@ var (
 
 const (
 	SecretPath = "/var/lib/osd/secrets/"
+	// CustomSecretData is a constant used in the key context of the secrets APIs
+	// It indicates that the secret provider should not generate secret but use the provided secret
+	// in the API
+	CustomSecretData = "custom_secret_data"
+	// PublicSecretData is a constant used in the key context of Secret APIs
+	// It indicates that the API is dealing with the public part of a secret instead
+	// of the actual secret
+	PublicSecretData = "public_secret_data"
 )
 
-// Secrets interface implemented by backed Key Management Systems (KMS)
+// Secrets interface implemented by backend Key Management Systems (KMS)
 type Secrets interface {
 	// String representation of the backend KMS
 	String() string
