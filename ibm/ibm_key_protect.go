@@ -35,8 +35,6 @@ const (
 	kvdbDataBasePath   = "ibm_kp/secrets/data/"
 	// kpClientTimeout is the http client timeout in seconds
 	kpClientTimeout = 10
-	// CustomSecretData is a constant used as a key context in the secrets APIs
-	CustomSecretData = "custom_secret_data"
 )
 
 var (
@@ -49,10 +47,18 @@ var (
 	// ErrInvalidKvdbProvided is returned when an incorrect KVDB implementation is provided for persistence store.
 	ErrInvalidKvdbProvided = errors.New("Invalid kvdb provided. IBM Key Protect secret store works in conjuction with a kvdb")
 	// ErrInvalidSecretData is returned when no secret data is found
-	ErrInvalidSecretData = errors.New("Secret Data cannot be empty when CustomSecretData flag is set")
-	// ErrInvalidKeyContext is returned when secret data is provided without CustomSecretData key context
-	ErrInvalidKeyContext = errors.New("Secret Data cannot be provided when CustomSecretData flag is not set")
+	ErrInvalidSecretData = errors.New("Secret Data cannot be empty when CustomSecretData|PublicSecretData flag is set")
 )
+
+// ErrInvalidKeyContext is returned when secret data is provided to the secret APIs with an invalid
+// key context.
+type ErrInvalidKeyContext struct {
+	Reason string
+}
+
+func (e *ErrInvalidKeyContext) Error() string {
+	return fmt.Sprintf("invalid key context: %v", e.Reason)
+}
 
 type ibmKPSecret struct {
 	kp  *ibm.API
@@ -130,17 +136,26 @@ func (i *ibmKPSecret) GetSecret(
 	secretId string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	if exists, err := i.ps.Exists(secretId); err != nil {
-		return nil, err
-	} else if !exists {
-		return nil, secrets.ErrInvalidSecretId
+
+	_, customData := keyContext[secrets.CustomSecretData]
+	_, publicData := keyContext[secrets.PublicSecretData]
+	if customData && publicData {
+		return nil, &ErrInvalidKeyContext{
+			Reason: "both CustomSecretData and PublicSecretData flags cannot be set",
+		}
 	}
 
-	// Get the DEK (Data Encryption Key) from kvdb
-	dek, err := i.ps.GetPublic(secretId)
+	dek, err := i.getDekFromStore(secretId)
 	if err != nil {
 		return nil, err
 	}
+
+	secretData := make(map[string]interface{})
+	if publicData {
+		secretData[secretId] = dek
+		return secretData, nil
+	}
+
 	// Use the CRK to unwrap the DEK and get the secret passphrase
 	encodedPassphrase, err := i.kp.Unwrap(
 		context.Background(),
@@ -155,8 +170,7 @@ func (i *ibmKPSecret) GetSecret(
 	if err != nil {
 		return nil, err
 	}
-	secretData := make(map[string]interface{})
-	if _, ok := keyContext[CustomSecretData]; ok {
+	if customData {
 		if err := json.Unmarshal(decodedPassphrase, &secretData); err != nil {
 			return nil, err
 		}
@@ -175,20 +189,41 @@ func (i *ibmKPSecret) PutSecret(
 		dek []byte
 		err error
 	)
-	exists, err := i.ps.Exists(secretId)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return secrets.ErrSecretExists
-	}
-	_, customData := keyContext[CustomSecretData]
 
-	if customData && len(secretData) == 0 {
-		return ErrInvalidSecretData
-	} else if len(secretData) > 0 && !customData {
-		return ErrInvalidKeyContext
+	_, customData := keyContext[secrets.CustomSecretData]
+	_, publicData := keyContext[secrets.PublicSecretData]
+
+	if customData && publicData {
+		return &ErrInvalidKeyContext{
+			Reason: "both CustomSecretData and PublicSecretData flags cannot be set",
+		}
+	} else if !customData && !publicData && len(secretData) > 0 {
+		return &ErrInvalidKeyContext{
+			Reason: "secret data cannot be provided when none of CustomSecretData|PublicSecretData flag is not set",
+		}
+	} else if customData && len(secretData) == 0 {
+		return &ErrInvalidKeyContext{
+			Reason: "secret data needs to be provided when CustomSecretData flag is set",
+		}
+	} else if publicData && len(secretData) == 0 {
+		return &ErrInvalidKeyContext{
+			Reason: "secret data needs to be provided when PublicSecretData flag is set",
+		}
+	} else if publicData && len(secretData) > 0 {
+		publicDek, ok := secretData[secretId]
+		if !ok {
+			return ErrInvalidSecretData
+		}
+		dek, ok = publicDek.([]byte)
+		if !ok {
+			return &ErrInvalidKeyContext{
+				Reason: "secret data when PublicSecretData flag is set should be of the type []byte",
+			}
+		}
+
 	} else if len(secretData) > 0 && customData {
+		// Wrap the custom secret data and create a new entry in store
+		// with the input secretID and the returned dek
 		value, err := json.Marshal(secretData)
 		if err != nil {
 			return err
@@ -201,6 +236,8 @@ func (i *ibmKPSecret) PutSecret(
 			nil,
 		)
 	} else {
+		// Generate a new dek and create a new entry in store
+		// with the input secretID and the generated dek
 		_, dek, err = i.kp.WrapCreateDEK(
 			context.Background(),
 			i.crk,
@@ -249,6 +286,17 @@ func (i *ibmKPSecret) Rencrypt(
 	encryptedData string,
 ) (string, error) {
 	return "", secrets.ErrNotSupported
+}
+
+func (i *ibmKPSecret) getDekFromStore(secretId string) ([]byte, error) {
+	if exists, err := i.ps.Exists(secretId); err != nil {
+		return nil, err
+	} else if !exists {
+		return nil, secrets.ErrInvalidSecretId
+	}
+
+	// Get the DEK (Data Encryption Key) from kvdb
+	return i.ps.GetPublic(secretId)
 }
 
 func getIbmParam(secretConfig map[string]interface{}, name string) string {

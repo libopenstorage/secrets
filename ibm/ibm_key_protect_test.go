@@ -15,6 +15,7 @@ import (
 const (
 	testSecretIdWithPassphrase = "openstorage_secret_with_passphrase"
 	testSecretId               = "openstorage_secret"
+	testSecretIdWithPublic     = "openstorage_secret_with_public"
 )
 
 func TestAll(t *testing.T) {
@@ -48,15 +49,21 @@ func (i *ibmSecretTest) TestPutSecret(t *testing.T) error {
 
 	// PutSecret with non-nil secretData and no key context
 	err := i.s.PutSecret(testSecretIdWithPassphrase, secretData, nil)
-	assert.Error(t, ErrInvalidSecretData, "Expected error on PutSecret")
+	assert.Error(t, err, "Expected error on PutSecret")
+	errInvalidContext, ok := err.(*ErrInvalidKeyContext)
+	assert.True(t, ok, "Unexpected error on PutSecret")
+	assert.Contains(t, errInvalidContext.Error(), "when none of", "Unexpected error on PutSecret")
 
 	keyContext := make(map[string]string)
-	keyContext[CustomSecretData] = "true"
+	keyContext[secrets.CustomSecretData] = "true"
 
 	// PutSecret with nil secretData and key context
 	err = i.s.PutSecret(testSecretIdWithPassphrase, nil, keyContext)
-	assert.Error(t, ErrInvalidKeyContext, "Expected error on PutSecret")
+	errInvalidContext, ok = err.(*ErrInvalidKeyContext)
+	assert.True(t, ok, "Unexpected error on PutSecret")
+	assert.Contains(t, errInvalidContext.Error(), "secret data needs to be provided", "Unexpected error on PutSecret")
 
+	// Successful PutSecret with custom secret data
 	err = i.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 
@@ -64,9 +71,30 @@ func (i *ibmSecretTest) TestPutSecret(t *testing.T) error {
 	err = i.s.PutSecret(testSecretId, nil, nil)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 
-	// PutSecret with already existing secretId
-	err = i.s.PutSecret(testSecretId, secretData, nil)
-	assert.EqualError(t, secrets.ErrSecretExists, err.Error(), "Expected PutSecret to fail")
+	// Both CustomSecretData and PublicSecretData cannot be set
+	keyContext[secrets.PublicSecretData] = "true"
+	err = i.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
+	errInvalidContext, ok = err.(*ErrInvalidKeyContext)
+	assert.True(t, ok, "Unexpected error on PutSecret")
+	assert.Contains(t, errInvalidContext.Error(), "both", "Unexpected error on PutSecret")
+
+	delete(keyContext, secrets.CustomSecretData)
+
+	// PublicSecretData with no data
+	err = i.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
+	errInvalidContext, ok = err.(*ErrInvalidKeyContext)
+	assert.True(t, ok, "Unexpected error on PutSecret")
+	assert.Contains(t, errInvalidContext.Error(), "secret data needs to be provided", "Unexpected error on PutSecret")
+
+	// Successful PutSecret with PublicSecretData
+	getKC := make(map[string]string)
+	getKC[secrets.PublicSecretData] = "true"
+	secretData, err = i.s.GetSecret(testSecretId, getKC)
+	dek := secretData[testSecretId]
+	putSecretData := make(map[string]interface{})
+	putSecretData[testSecretIdWithPublic] = dek
+	err = i.s.PutSecret(testSecretIdWithPublic, putSecretData, keyContext)
+	assert.NoError(t, err, "Unexpected error on PutSecret")
 	return nil
 }
 
@@ -77,7 +105,7 @@ func (i *ibmSecretTest) TestGetSecret(t *testing.T) error {
 
 	// GetSecret using a secretId with data
 	keyContext := make(map[string]string)
-	keyContext[CustomSecretData] = "true"
+	keyContext[secrets.CustomSecretData] = "true"
 	plainText1, err := i.s.GetSecret(testSecretIdWithPassphrase, keyContext)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
 	// We have got secretData
@@ -91,6 +119,29 @@ func (i *ibmSecretTest) TestGetSecret(t *testing.T) error {
 	// GetSecret using a secretId without data
 	_, err = i.s.GetSecret(testSecretId, nil)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
+
+	// Both the flags are set
+	keyContext[secrets.PublicSecretData] = "true"
+	_, err = i.s.GetSecret(testSecretIdWithPublic, keyContext)
+	errInvalidContext, ok := err.(*ErrInvalidKeyContext)
+	assert.True(t, ok, "Unexpected error on PutSecret")
+	assert.Contains(t, errInvalidContext.Error(), "both", "Unexpected error on PutSecret")
+
+	// GetSecret using the secretID for public
+	delete(keyContext, secrets.CustomSecretData)
+
+	// deks for both secrets should match
+	sec1, err := i.s.GetSecret(testSecretId, keyContext)
+	assert.NoError(t, err, "Unexpected error on GetSecret")
+	dek1, ok := sec1[testSecretId]
+	assert.True(t, ok, "Unexpected secret returned")
+
+	sec2, err := i.s.GetSecret(testSecretIdWithPublic, keyContext)
+	assert.NoError(t, err, "Unexpected error on GetSecret")
+	dek2, ok := sec2[testSecretIdWithPublic]
+	assert.True(t, ok, "Unexpected secret returned")
+
+	assert.Equal(t, dek1, dek2, "Unequal secrets returned.")
 	return nil
 }
 
