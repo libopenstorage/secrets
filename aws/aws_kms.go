@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -69,12 +70,19 @@ func New(
 	v, _ := secretConfig[AwsCMKey]
 	cmk, _ := v.(string)
 	if cmk == "" {
-		return nil, ErrCMKNotProvided
+		cmk = os.Getenv(AwsCMKey)
+		if cmk == "" {
+			return nil, ErrCMKNotProvided
+		}
+
 	}
 	v, _ = secretConfig[AwsRegionKey]
 	region, _ := v.(string)
 	if region == "" {
-		return nil, ErrAWSRegionNotProvided
+		region = os.Getenv(AwsRegionKey)
+		if region == "" {
+			return nil, ErrAWSRegionNotProvided
+		}
 	}
 	v, ok := secretConfig[KMSKvdbKey]
 	if ok {
