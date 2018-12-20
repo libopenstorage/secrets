@@ -1,4 +1,4 @@
-package ibm
+package gcloud
 
 import (
 	"os"
@@ -19,31 +19,40 @@ const (
 )
 
 func TestAll(t *testing.T) {
+	// Set the relevant environmnet fields for aws.
 	secretConfig := make(map[string]interface{})
+	// Fill in the appropriate keys and values
+	secretConfig[GoogleKmsResourceKey] = os.Getenv(GoogleKmsResourceKey)
 
-	// With kvdbPersistenceStore
 	kv, err := kvdb.New(mem.Name, "openstorage/", nil, nil, nil)
 	if err != nil {
-		t.Fatalf("Unable to create a IBM Key Protect Secret instance: %v", err)
+		t.Fatalf("Unable to create a gcloud secret instance: %v", err)
 		return
 	}
-	secretConfig[IbmKvdbKey] = kv
-	kp, err := New(secretConfig)
+	secretConfig[KMSKvdbKey] = kv
+	gs, err := NewGcloudSecretTest(secretConfig)
 	if err != nil {
-		t.Fatalf("Unable to create a IBM Key Protect Secret instance: %v", err)
+		t.Fatalf("Unable to create a gcloud secret instance: %v", err)
 		return
 	}
-	ik := &ibmSecretTest{kp, "", 0}
-	test.Run(ik, t)
+	test.Run(gs, t)
 }
 
-type ibmSecretTest struct {
+type gcloudSecretTest struct {
 	s          secrets.Secrets
 	passphrase string
 	totalPuts  int
 }
 
-func (i *ibmSecretTest) TestPutSecret(t *testing.T) error {
+func NewGcloudSecretTest(secretConfig map[string]interface{}) (test.SecretTest, error) {
+	s, err := New(secretConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &gcloudSecretTest{s, "", 0}, nil
+}
+
+func (i *gcloudSecretTest) TestPutSecret(t *testing.T) error {
 	secretData := make(map[string]interface{})
 	i.passphrase = uuid.New()
 	secretData[testSecretIdWithPassphrase] = i.passphrase
@@ -71,8 +80,7 @@ func (i *ibmSecretTest) TestPutSecret(t *testing.T) error {
 
 	// PutSecret with nil secretData
 	err = i.s.PutSecret(testSecretId, nil, nil)
-	assert.NoError(t, err, "Unexpected error on PutSecret")
-	i.totalPuts++
+	assert.Error(t, secrets.ErrEmptySecretData, err.Error(), "Unexpected error on PutSecret")
 
 	// Both CustomSecretData and PublicSecretData cannot be set
 	keyContext[secrets.PublicSecretData] = "true"
@@ -92,8 +100,8 @@ func (i *ibmSecretTest) TestPutSecret(t *testing.T) error {
 	// Successful PutSecret with PublicSecretData
 	getKC := make(map[string]string)
 	getKC[secrets.PublicSecretData] = "true"
-	secretData, err = i.s.GetSecret(testSecretId, getKC)
-	dek := secretData[testSecretId]
+	secretData, err = i.s.GetSecret(testSecretIdWithPassphrase, getKC)
+	dek := secretData[testSecretIdWithPassphrase]
 	putSecretData := make(map[string]interface{})
 	putSecretData[testSecretIdWithPublic] = dek
 	err = i.s.PutSecret(testSecretIdWithPublic, putSecretData, keyContext)
@@ -102,7 +110,7 @@ func (i *ibmSecretTest) TestPutSecret(t *testing.T) error {
 	return nil
 }
 
-func (i *ibmSecretTest) TestGetSecret(t *testing.T) error {
+func (i *gcloudSecretTest) TestGetSecret(t *testing.T) error {
 	// GetSecret with non-existant id
 	_, err := i.s.GetSecret("dummy", nil)
 	assert.Error(t, err, "Expected GetSecret to fail")
@@ -122,7 +130,7 @@ func (i *ibmSecretTest) TestGetSecret(t *testing.T) error {
 
 	// GetSecret using a secretId without data
 	_, err = i.s.GetSecret(testSecretId, nil)
-	assert.NoError(t, err, "Unexpected error on GetSecret")
+	assert.Error(t, secrets.ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret")
 
 	// Both the flags are set
 	keyContext[secrets.PublicSecretData] = "true"
@@ -135,9 +143,9 @@ func (i *ibmSecretTest) TestGetSecret(t *testing.T) error {
 	delete(keyContext, secrets.CustomSecretData)
 
 	// deks for both secrets should match
-	sec1, err := i.s.GetSecret(testSecretId, keyContext)
+	sec1, err := i.s.GetSecret(testSecretIdWithPassphrase, keyContext)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
-	dek1, ok := sec1[testSecretId]
+	dek1, ok := sec1[testSecretIdWithPassphrase]
 	assert.True(t, ok, "Unexpected secret returned")
 
 	sec2, err := i.s.GetSecret(testSecretIdWithPublic, keyContext)
@@ -149,7 +157,14 @@ func (i *ibmSecretTest) TestGetSecret(t *testing.T) error {
 	return nil
 }
 
-func (i *ibmSecretTest) TestDeleteSecret(t *testing.T) error {
+func (i *gcloudSecretTest) TestListSecrets(t *testing.T) error {
+	ids, err := i.s.ListSecrets()
+	assert.NoError(t, err, "Unexpected error on ListSecrets")
+	assert.Equal(t, len(ids), i.totalPuts, "Unexpected number of secrets listed")
+	return nil
+}
+
+func (i *gcloudSecretTest) TestDeleteSecret(t *testing.T) error {
 	// Delete of a key that exists should succeed
 	err := i.s.DeleteSecret(testSecretId, nil)
 	assert.NoError(t, err, "Unexpected error on DeleteSecret")
@@ -164,17 +179,8 @@ func (i *ibmSecretTest) TestDeleteSecret(t *testing.T) error {
 	return nil
 }
 
-func (i *ibmSecretTest) TestListSecrets(t *testing.T) error {
-	ids, err := i.s.ListSecrets()
-	assert.NoError(t, err, "Unexpected error on ListSecrets")
-	assert.Equal(t, len(ids), i.totalPuts, "Unexpected number of secrets listed")
-	return nil
-}
-
 func TestNew(t *testing.T) {
-	os.Unsetenv(IbmServiceApiKey)
-	os.Unsetenv(IbmInstanceIdKey)
-	os.Unsetenv(IbmCustomerRootKey)
+	os.Unsetenv(GoogleKmsResourceKey)
 	// nil secret config
 	_, err := New(nil)
 	assert.EqualError(t, err, ErrInvalidKvdbProvided.Error(), "Unexpected error on nil secret config")
@@ -185,7 +191,7 @@ func TestNew(t *testing.T) {
 	assert.EqualError(t, err, ErrInvalidKvdbProvided.Error(), "Unexpected error on empty secret config")
 
 	// kvdb key is incorrect
-	secretConfig[IbmKvdbKey] = "dummy"
+	secretConfig[KMSKvdbKey] = "dummy"
 	_, err = New(secretConfig)
 	assert.EqualError(t, err, ErrInvalidKvdbProvided.Error(), "Unepxected error when Kvdb Key not provided")
 
@@ -197,29 +203,11 @@ func TestNew(t *testing.T) {
 	}
 
 	// kvdb key is correct
-	secretConfig[IbmKvdbKey] = kv
+	secretConfig[KMSKvdbKey] = kv
 	kp, err := New(secretConfig)
-	assert.EqualError(t, err, ErrCRKNotProvided.Error(), "Unepxected error when Kvdb Key not provided")
-	// crk not provided
-	secretConfig[IbmServiceApiKey] = "foo"
-	secretConfig[IbmInstanceIdKey] = "bar"
-	_, err = New(secretConfig)
-	assert.EqualError(t, err, ErrCRKNotProvided.Error(), "Unepxected error when CRK not provided")
+	assert.EqualError(t, err, ErrGoogleKmsResourceKeyNotProvided.Error(), "Unepxected error when Kvdb Key not provided")
 
-	// service api key not provided
-	secretConfig[IbmCustomerRootKey] = "bar1"
-	delete(secretConfig, IbmServiceApiKey)
-	_, err = New(secretConfig)
-	assert.EqualError(t, err, ErrIbmServiceApiKeyNotSet.Error(), "Unexpected error when Service API Key not provided")
-
-	// instance id not provided
-	secretConfig[IbmServiceApiKey] = "foo"
-	delete(secretConfig, IbmInstanceIdKey)
-	_, err = New(secretConfig)
-	assert.EqualError(t, err, ErrIbmInstanceIdKeyNotSet.Error(), "Unexpected error when Instance ID Key not provided")
-
-	// kvdb key not provided
-	secretConfig[IbmInstanceIdKey] = "bar"
+	secretConfig[GoogleKmsResourceKey] = "crk"
 	kp, err = New(secretConfig)
 	assert.NotNil(t, kp, "Expected New API to succeed")
 	assert.NoError(t, err, "Unepxected error on New")

@@ -182,6 +182,10 @@ func (v *vaultSecrets) Rencrypt(
 	return "", secrets.ErrNotSupported
 }
 
+func (v *vaultSecrets) ListSecrets() ([]string, error) {
+	return nil, secrets.ErrNotSupported
+}
+
 func isKvBackendV2(client *api.Client, backendPath string) (bool, error) {
 	mounts, err := client.Sys().ListMounts()
 	if err != nil {

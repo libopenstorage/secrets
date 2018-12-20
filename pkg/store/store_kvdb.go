@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 
 	"github.com/portworx/kvdb"
 )
@@ -146,6 +147,19 @@ func (k *kvdbPersistenceStore) Delete(secretId string) error {
 		return nil
 	}
 	return err
+}
+
+func (k *kvdbPersistenceStore) List() ([]string, error) {
+	kvps, err := k.kv.Enumerate(k.kvdbPublicBasePath)
+	if err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	for _, kvp := range kvps {
+		_, id := path.Split(kvp.Key)
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func (k *kvdbPersistenceStore) Name() string {

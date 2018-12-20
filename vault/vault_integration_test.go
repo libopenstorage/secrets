@@ -84,3 +84,10 @@ func (v *vaultSecretTest) TestDeleteSecret(t *testing.T) error {
 	// TestPutSecret does delete testing as well
 	return nil
 }
+
+func (v *vaultSecretTest) TestListSecrets(t *testing.T) error {
+	ids, err := v.s.ListSecrets()
+	assert.Error(t, secrets.ErrNotSupported, err.Error(), "ListSecrets is not supported for vault")
+	assert.Nil(t, ids, "Ids is expected to be nil")
+	return nil
+}

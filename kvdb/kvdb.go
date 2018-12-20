@@ -2,6 +2,7 @@ package kvdb
 
 import (
 	"errors"
+	"path"
 
 	"github.com/libopenstorage/secrets"
 	kv "github.com/portworx/kvdb"
@@ -66,6 +67,19 @@ func (v *kvdbSecrets) DeleteSecret(
 ) error {
 	_, err := v.client.Delete(SecretKey + secretId)
 	return err
+}
+
+func (v *kvdbSecrets) ListSecrets() ([]string, error) {
+	kvps, err := v.client.Enumerate(SecretKey)
+	if err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	for _, kvp := range kvps {
+		_, id := path.Split(kvp.Key)
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func (v *kvdbSecrets) Encrypt(

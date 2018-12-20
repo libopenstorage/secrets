@@ -99,3 +99,11 @@ func (d *dcosSecretTest) TestDeleteSecret(t *testing.T) error {
 	return nil
 
 }
+
+func (d *dcosSecretTest) TestListSecrets(t *testing.T) error {
+	ids, err := d.s.ListSecrets()
+	assert.Error(t, secrets.ErrNotSupported, err.Error(), "ListSecrets is not supported for vault")
+	assert.Nil(t, ids, "Ids is expected to be nil")
+	return nil
+
+}

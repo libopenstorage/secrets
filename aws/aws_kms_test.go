@@ -48,7 +48,8 @@ func TestAll(t *testing.T) {
 }
 
 type awsSecretTest struct {
-	s secrets.Secrets
+	s         secrets.Secrets
+	totalPuts int
 }
 
 func NewAwsSecretTest(secretConfig map[string]interface{}) (test.SecretTest, error) {
@@ -56,7 +57,7 @@ func NewAwsSecretTest(secretConfig map[string]interface{}) (test.SecretTest, err
 	if err != nil {
 		return nil, err
 	}
-	return &awsSecretTest{s}, nil
+	return &awsSecretTest{s, 0}, nil
 }
 
 func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
@@ -66,10 +67,12 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 	// PutSecret with non-nil secretData
 	err := a.s.PutSecret(secretIdWithData, secretData, nil)
 	assert.NoError(t, err, "Unepxected error on PutSecret")
+	a.totalPuts++
 
 	// PutSecret with nil secretData
 	err = a.s.PutSecret(secretIdWithoutData, nil, nil)
 	assert.NoError(t, err, "Expected PutSecret to succeed. Failed with error: %v", err)
+	a.totalPuts++
 
 	// PutSecret with already existing secretId
 	err = a.s.PutSecret(secretIdWithData, secretData, nil)
@@ -99,6 +102,13 @@ func (a *awsSecretTest) TestGetSecret(t *testing.T) error {
 	// GetSecret using a secretId without data
 	_, err = a.s.GetSecret(secretIdWithoutData, nil)
 	assert.NoError(t, err, "Expected GetSecret to succeed")
+	return nil
+}
+
+func (a *awsSecretTest) TestListSecrets(t *testing.T) error {
+	ids, err := a.s.ListSecrets()
+	assert.NoError(t, err, "Unexpected error on ListSecrets")
+	assert.Equal(t, len(ids), a.totalPuts, "Unexpected number of secrets listed")
 	return nil
 }
 

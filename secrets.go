@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"errors"
+	"fmt"
 )
 
 var (
@@ -15,6 +16,8 @@ var (
 	ErrEmptySecretData = errors.New("Secret data cannot be empty")
 	// ErrSecretExists returned when a secret for the given secret id already exists
 	ErrSecretExists = errors.New("Secret Id already exists")
+	// ErrInvalidSecretData is returned when no secret data is found
+	ErrInvalidSecretData = errors.New("Secret Data cannot be empty when CustomSecretData|PublicSecretData flag is set")
 )
 
 const (
@@ -87,8 +90,50 @@ type Secrets interface {
 		newKeyContext map[string]string,
 		encryptedData string,
 	) (string, error)
+
+	// ListSecrets returns a list of known secretIDs
+	ListSecrets() ([]string, error)
 }
 
 type BackendInit func(
 	secretConfig map[string]interface{},
 ) (Secrets, error)
+
+// ErrInvalidKeyContext is returned when secret data is provided to the secret APIs with an invalid
+// key context.
+type ErrInvalidKeyContext struct {
+	Reason string
+}
+
+func (e *ErrInvalidKeyContext) Error() string {
+	return fmt.Sprintf("invalid key context: %v", e.Reason)
+}
+
+// KeyContextChecks performs a series of checks on the keys and values
+// passed through the key context map
+func KeyContextChecks(
+	keyContext map[string]string,
+	secretData map[string]interface{},
+) error {
+	_, customData := keyContext[CustomSecretData]
+	_, publicData := keyContext[PublicSecretData]
+
+	if customData && publicData {
+		return &ErrInvalidKeyContext{
+			Reason: "both CustomSecretData and PublicSecretData flags cannot be set",
+		}
+	} else if !customData && !publicData && len(secretData) > 0 {
+		return &ErrInvalidKeyContext{
+			Reason: "secret data cannot be provided when none of CustomSecretData|PublicSecretData flag is not set",
+		}
+	} else if customData && len(secretData) == 0 {
+		return &ErrInvalidKeyContext{
+			Reason: "secret data needs to be provided when CustomSecretData flag is set",
+		}
+	} else if publicData && len(secretData) == 0 {
+		return &ErrInvalidKeyContext{
+			Reason: "secret data needs to be provided when PublicSecretData flag is set",
+		}
+	}
+	return nil
+}

@@ -175,6 +175,10 @@ func (d *dcosSecrets) Rencrypt(
 	return "", secrets.ErrNotSupported
 }
 
+func (d *dcosSecrets) ListSecrets() ([]string, error) {
+	return nil, secrets.ErrNotSupported
+}
+
 func getConfigParam(secretConfig map[string]interface{}, key string) string {
 	if valueInterface, exists := secretConfig[key]; exists {
 		if value, ok := valueInterface.(string); ok {

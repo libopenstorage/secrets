@@ -6,6 +6,7 @@ import (
 
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/test"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAll(t *testing.T) {
@@ -63,4 +64,12 @@ func (d *dockerSecretTest) TestGetSecret(t *testing.T) error {
 
 func (d *dockerSecretTest) TestDeleteSecret(t *testing.T) error {
 	return nil
+}
+
+func (d *dockerSecretTest) TestListSecrets(t *testing.T) error {
+	ids, err := d.s.ListSecrets()
+	assert.Error(t, secrets.ErrNotSupported, err.Error(), "ListSecrets is not supported for vault")
+	assert.Nil(t, ids, "Ids is expected to be nil")
+	return nil
+
 }
