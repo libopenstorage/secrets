@@ -68,7 +68,7 @@ func (d *dockerSecretTest) TestDeleteSecret(t *testing.T) error {
 
 func (d *dockerSecretTest) TestListSecrets(t *testing.T) error {
 	ids, err := d.s.ListSecrets()
-	assert.Error(t, secrets.ErrNotSupported, err.Error(), "ListSecrets is not supported for vault")
+	assert.Error(t, secrets.ErrNotSupported, err.Error(), "ListSecrets is not supported for Docker Secrets")
 	assert.Nil(t, ids, "Ids is expected to be nil")
 	return nil
 

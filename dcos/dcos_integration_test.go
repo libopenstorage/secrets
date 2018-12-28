@@ -102,7 +102,7 @@ func (d *dcosSecretTest) TestDeleteSecret(t *testing.T) error {
 
 func (d *dcosSecretTest) TestListSecrets(t *testing.T) error {
 	ids, err := d.s.ListSecrets()
-	assert.Error(t, secrets.ErrNotSupported, err.Error(), "ListSecrets is not supported for vault")
+	assert.Error(t, secrets.ErrNotSupported, err.Error(), "ListSecrets is not supported for DCOS")
 	assert.Nil(t, ids, "Ids is expected to be nil")
 	return nil
 

@@ -19,7 +19,7 @@ const (
 )
 
 func TestAll(t *testing.T) {
-	// Set the relevant environmnet fields for aws.
+	// Set the relevant environmnet fields for google cloud.
 	secretConfig := make(map[string]interface{})
 	// Fill in the appropriate keys and values
 	secretConfig[GoogleKmsResourceKey] = os.Getenv(GoogleKmsResourceKey)

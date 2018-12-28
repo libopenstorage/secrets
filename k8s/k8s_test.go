@@ -102,7 +102,7 @@ func (k *k8sSecretTest) TestDeleteSecret(t *testing.T) error {
 
 func (k *k8sSecretTest) TestListSecrets(t *testing.T) error {
 	ids, err := k.s.ListSecrets()
-	assert.Error(t, secrets.ErrNotSupported, err.Error(), "ListSecrets is not supported for vault")
+	assert.Error(t, secrets.ErrNotSupported, err.Error(), "ListSecrets is not supported for k8s secrets")
 	assert.Nil(t, ids, "Ids is expected to be nil")
 	return nil
 }
