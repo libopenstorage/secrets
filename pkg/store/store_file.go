@@ -74,6 +74,18 @@ func (f *filePersistenceStore) Delete(secretId string) error {
 	return os.Remove(path)
 }
 
+func (f *filePersistenceStore) List() ([]string, error) {
+	files, err := ioutil.ReadDir(secrets.SecretPath)
+	if err != nil {
+		return nil, err
+	}
+	secretIds := []string{}
+	for _, f := range files {
+		secretIds = append(secretIds, f.Name())
+	}
+	return secretIds, nil
+}
+
 func (f *filePersistenceStore) Name() string {
 	return FilePersistenceStoreName
 }

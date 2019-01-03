@@ -214,6 +214,10 @@ func (a *awsKmsSecrets) DeleteSecret(
 	return a.ps.Delete(secretId)
 }
 
+func (a *awsKmsSecrets) ListSecrets() ([]string, error) {
+	return a.ps.List()
+}
+
 func (a *awsKmsSecrets) Encrypt(
 	secretId string,
 	plaintTextData string,

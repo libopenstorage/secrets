@@ -46,19 +46,7 @@ var (
 	ErrCRKNotProvided = errors.New("IBM Customer Root Key not provided. Cannot perform Key Protect operations.")
 	// ErrInvalidKvdbProvided is returned when an incorrect KVDB implementation is provided for persistence store.
 	ErrInvalidKvdbProvided = errors.New("Invalid kvdb provided. IBM Key Protect secret store works in conjuction with a kvdb")
-	// ErrInvalidSecretData is returned when no secret data is found
-	ErrInvalidSecretData = errors.New("Secret Data cannot be empty when CustomSecretData|PublicSecretData flag is set")
 )
-
-// ErrInvalidKeyContext is returned when secret data is provided to the secret APIs with an invalid
-// key context.
-type ErrInvalidKeyContext struct {
-	Reason string
-}
-
-func (e *ErrInvalidKeyContext) Error() string {
-	return fmt.Sprintf("invalid key context: %v", e.Reason)
-}
 
 type ibmKPSecret struct {
 	kp  *ibm.API
@@ -140,7 +128,7 @@ func (i *ibmKPSecret) GetSecret(
 	_, customData := keyContext[secrets.CustomSecretData]
 	_, publicData := keyContext[secrets.PublicSecretData]
 	if customData && publicData {
-		return nil, &ErrInvalidKeyContext{
+		return nil, &secrets.ErrInvalidKeyContext{
 			Reason: "both CustomSecretData and PublicSecretData flags cannot be set",
 		}
 	}
@@ -193,30 +181,16 @@ func (i *ibmKPSecret) PutSecret(
 	_, customData := keyContext[secrets.CustomSecretData]
 	_, publicData := keyContext[secrets.PublicSecretData]
 
-	if customData && publicData {
-		return &ErrInvalidKeyContext{
-			Reason: "both CustomSecretData and PublicSecretData flags cannot be set",
-		}
-	} else if !customData && !publicData && len(secretData) > 0 {
-		return &ErrInvalidKeyContext{
-			Reason: "secret data cannot be provided when none of CustomSecretData|PublicSecretData flag is not set",
-		}
-	} else if customData && len(secretData) == 0 {
-		return &ErrInvalidKeyContext{
-			Reason: "secret data needs to be provided when CustomSecretData flag is set",
-		}
-	} else if publicData && len(secretData) == 0 {
-		return &ErrInvalidKeyContext{
-			Reason: "secret data needs to be provided when PublicSecretData flag is set",
-		}
+	if err := secrets.KeyContextChecks(keyContext, secretData); err != nil {
+		return err
 	} else if publicData && len(secretData) > 0 {
 		publicDek, ok := secretData[secretId]
 		if !ok {
-			return ErrInvalidSecretData
+			return secrets.ErrInvalidSecretData
 		}
 		dek, ok = publicDek.([]byte)
 		if !ok {
-			return &ErrInvalidKeyContext{
+			return &secrets.ErrInvalidKeyContext{
 				Reason: "secret data when PublicSecretData flag is set should be of the type []byte",
 			}
 		}
@@ -260,6 +234,10 @@ func (i *ibmKPSecret) DeleteSecret(
 	keyContext map[string]string,
 ) error {
 	return i.ps.Delete(secretId)
+}
+
+func (i *ibmKPSecret) ListSecrets() ([]string, error) {
+	return i.ps.List()
 }
 
 func (i *ibmKPSecret) Encrypt(

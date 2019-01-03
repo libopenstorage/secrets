@@ -94,6 +94,10 @@ func (v *dockerSecrets) Rencrypt(
 	return "", secrets.ErrNotSupported
 }
 
+func (v *dockerSecrets) ListSecrets() ([]string, error) {
+	return nil, secrets.ErrNotSupported
+}
+
 func init() {
 	if err := secrets.Register(Name, New); err != nil {
 		panic(err.Error())

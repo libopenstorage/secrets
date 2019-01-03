@@ -23,4 +23,7 @@ type PersistenceStore interface {
 
 	// Name returns the name of persistence store
 	Name() string
+
+	// List returns list of all the secretIds
+	List() ([]string, error)
 }

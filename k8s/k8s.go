@@ -89,6 +89,10 @@ func (s *k8sSecrets) DeleteSecret(
 	return k8s.Instance().DeleteSecret(secretName, namespace)
 }
 
+func (s *k8sSecrets) ListSecrets() ([]string, error) {
+	return nil, secrets.ErrNotSupported
+}
+
 func (s *k8sSecrets) Encrypt(
 	secretId string,
 	plaintTextData string,
