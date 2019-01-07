@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Name       = "AzureKV"
+	Name       = "azure-kv"
 	AzureCloud = "AzurePublicCloud"
 	// AzureTenantID for Azure Active Directory
 	AzureTenantID = "AZURE_TENANT_ID"
