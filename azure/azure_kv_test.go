@@ -37,11 +37,15 @@ func NewAzureKVSecretTest(secretConfig map[string]interface{}) (test.SecretTest,
 
 func (a *azureSecretsTest) TestPutSecret(t *testing.T) error {
 	secretData := make(map[string]interface{})
+	// PutSecret should be successfull
+	err := a.s.PutSecret(testkey, secretData, nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Secret data cannot be empty", "Unexpected error on PutSecret")
 
 	secretData[testkey] = uuid.New()
 
 	// PutSecret should be successfull
-	err := a.s.PutSecret(testkey, secretData, nil)
+	err = a.s.PutSecret(testkey, secretData, nil)
 	assert.Nil(t, err)
 
 	// Since azure allow to set multiple version of same secrets
@@ -71,6 +75,9 @@ func (a *azureSecretsTest) TestGetSecret(t *testing.T) error {
 	// GetSecret with non-existant id
 	_, err := a.s.GetSecret("dummy", nil)
 	assert.Error(t, err, "Expected GetSecret to fail")
+
+	_, err = a.s.GetSecret("", nil)
+	assert.Error(t, err, "Secret Name/ID cannot be empty")
 
 	secretData := make(map[string]interface{})
 	secretData[testkey] = testsecret

@@ -84,6 +84,9 @@ func (az *azureSecrets) GetSecret(
 	ctx, cancel := context.WithTimeout(context.Background(), 6000*time.Second)
 	defer cancel()
 
+	if secretID == "" {
+		return nil, secrets.ErrEmptySecretId
+	}
 	secretResp, err := az.kv.GetSecret(ctx, az.baseURL, secretID, "")
 	if err != nil {
 		return nil, err
@@ -101,6 +104,13 @@ func (az *azureSecrets) PutSecret(
 ) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 6000*time.Second)
 	defer cancel()
+
+	if secretName == "" {
+		return secrets.ErrEmptySecretId
+	}
+	if len(secretData) == 0 {
+		return secrets.ErrEmptySecretData
+	}
 	_, err := az.kv.SetSecret(ctx, az.baseURL, secretName, keyvault.SecretSetParameters{
 		Value: to.StringPtr(secretData[secretName].(string)),
 	})
@@ -116,6 +126,9 @@ func (az *azureSecrets) DeleteSecret(
 	ctx, cancel := context.WithTimeout(context.Background(), 6000*time.Second)
 	defer cancel()
 
+	if secretName == "" {
+		return secrets.ErrEmptySecretId
+	}
 	_, err := az.kv.DeleteSecret(ctx, az.baseURL, secretName)
 	if err != nil {
 		return err

@@ -14,6 +14,8 @@ var (
 	ErrInvalidSecretId = errors.New("No Secret Data found for Secret ID")
 	// ErrEmptySecretData returned when no secret data is provided to store the secret
 	ErrEmptySecretData = errors.New("Secret data cannot be empty")
+	// ErrEmptySecretId returned when no secret Name/ID is provided to retrive secret data
+	ErrEmptySecretId = errors.New("Secret Name/ID cannot be empty")
 	// ErrSecretExists returned when a secret for the given secret id already exists
 	ErrSecretExists = errors.New("Secret Id already exists")
 	// ErrInvalidSecretData is returned when no secret data is found
