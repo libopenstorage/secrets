@@ -13,6 +13,16 @@ import (
 const (
 	Name       = "AzureKV"
 	AzureCloud = "AzurePublicCloud"
+	// AzureTenantID for Azure Active Directory
+	AzureTenantID = "AZURE_TENANT_ID"
+	// AzureClientID of service principal account
+	AzureClientID = "AZURE_CLIENT_ID"
+	// AzureClientSecret of service principal account
+	AzureClientSecret = "AZURE_CLIENT_SECRET"
+	// AzureEnviornment to connect
+	AzureEnviornment = "AZURE_ENVIORNMENT"
+	// AzureVaultURI of azure key vault
+	AzureVaultURI = "AZURE_VAULT_URL"
 )
 
 var (
