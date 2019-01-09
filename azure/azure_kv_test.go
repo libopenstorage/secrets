@@ -5,7 +5,6 @@ import (
 
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/test"
-	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -42,7 +41,9 @@ func (a *azureSecretsTest) TestPutSecret(t *testing.T) error {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "Secret data cannot be empty", "Unexpected error on PutSecret")
 
-	secretData[testkey] = uuid.New()
+	secretData["testcred"] = "test-cred"
+	secretData["testval"] = 10
+	secretData["testzone"] = "azure--dummy"
 
 	// PutSecret should be successfull
 	err = a.s.PutSecret(testkey, secretData, nil)
@@ -58,7 +59,7 @@ func (a *azureSecretsTest) TestPutSecret(t *testing.T) error {
 	resp, err := a.s.GetSecret(testkey, nil)
 	assert.Nil(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, resp[testkey].(string), testsecret)
+	assert.Equal(t, resp["testcred"].(string), "test-cred")
 
 	// clean up
 	err = a.s.DeleteSecret(testkey, nil)
@@ -80,14 +81,17 @@ func (a *azureSecretsTest) TestGetSecret(t *testing.T) error {
 	assert.Error(t, err, "Secret Name/ID cannot be empty")
 
 	secretData := make(map[string]interface{})
-	secretData[testkey] = testsecret
+	secretData["testcred"] = "test-cred"
+	secretData["testval"] = 10
+	secretData["testzone"] = "azure--dummy"
+
 	err = a.s.PutSecret(testkey, secretData, nil)
 	assert.Nil(t, err)
 
 	resp, err := a.s.GetSecret(testkey, nil)
 	assert.Nil(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, resp[testkey].(string), testsecret)
+	assert.Equal(t, resp["testzone"].(string), "azure--dummy")
 
 	// clean up
 	err = a.s.DeleteSecret(testkey, nil)

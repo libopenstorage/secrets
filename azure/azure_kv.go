@@ -2,11 +2,13 @@ package azure
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/keyvault/2016-10-01/keyvault"
 	"github.com/Azure/go-autorest/autorest/to"
+
+	"github.com/Azure/azure-sdk-for-go/services/keyvault/2016-10-01/keyvault"
 	"github.com/libopenstorage/secrets"
 )
 
@@ -22,7 +24,7 @@ const (
 	// AzureEnviornment to connect
 	AzureEnviornment = "AZURE_ENVIORNMENT"
 	// AzureVaultURI of azure key vault
-	AzureVaultURI = "AZURE_VAULT_URL"
+	AzureVaultURL = "AZURE_VAULT_URL"
 )
 
 var (
@@ -91,8 +93,13 @@ func (az *azureSecrets) GetSecret(
 	if err != nil {
 		return nil, err
 	}
+
 	secretData := make(map[string]interface{})
-	secretData[secretID] = *secretResp.Value
+	err = json.Unmarshal([]byte(*secretResp.Value), &secretData)
+	if err != nil {
+		secretData = make(map[string]interface{})
+		secretData[secretID] = *secretResp.Value
+	}
 
 	return secretData, nil
 }
@@ -111,13 +118,16 @@ func (az *azureSecrets) PutSecret(
 	if len(secretData) == 0 {
 		return secrets.ErrEmptySecretData
 	}
-	_, err := az.kv.SetSecret(ctx, az.baseURL, secretName, keyvault.SecretSetParameters{
-		Value: to.StringPtr(secretData[secretName].(string)),
-	})
+
+	value, err := json.Marshal(secretData)
 	if err != nil {
 		return err
 	}
-	return nil
+	_, err = az.kv.SetSecret(ctx, az.baseURL, secretName, keyvault.SecretSetParameters{
+		Value: to.StringPtr(string(value)),
+	})
+
+	return err
 }
 func (az *azureSecrets) DeleteSecret(
 	secretName string,
@@ -130,11 +140,8 @@ func (az *azureSecrets) DeleteSecret(
 		return secrets.ErrEmptySecretId
 	}
 	_, err := az.kv.DeleteSecret(ctx, az.baseURL, secretName)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 func (az *azureSecrets) ListSecrets() ([]string, error) {
