@@ -25,6 +25,8 @@ const (
 	AzureEnviornment = "AZURE_ENVIORNMENT"
 	// AzureVaultURI of azure key vault
 	AzureVaultURL = "AZURE_VAULT_URL"
+	// Default context timeout for Azure SDK API's
+	defaultTimeout = 6000
 )
 
 var (
@@ -35,6 +37,7 @@ var (
 	ErrAzureEnvironmentNotset = errors.New("AZURE_ENVIRONMENT not set.")
 	ErrAzureConfigMissing     = errors.New("AzureConfig is not provided")
 	ErrAzureAuthentication    = errors.New("Azure authentication failed")
+	ErrInvalidSecretResp      = errors.New("Secret Data received from secrets provider is either empty/invalid")
 )
 
 type azureSecrets struct {
@@ -83,7 +86,7 @@ func (az *azureSecrets) GetSecret(
 	secretID string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 6000*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout*time.Second)
 	defer cancel()
 
 	if secretID == "" {
@@ -94,6 +97,9 @@ func (az *azureSecrets) GetSecret(
 		return nil, err
 	}
 
+	if secretResp.Value == nil {
+		return nil, ErrInvalidSecretResp
+	}
 	secretData := make(map[string]interface{})
 	err = json.Unmarshal([]byte(*secretResp.Value), &secretData)
 	if err != nil {
@@ -109,7 +115,7 @@ func (az *azureSecrets) PutSecret(
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 6000*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout*time.Second)
 	defer cancel()
 
 	if secretName == "" {
@@ -133,7 +139,7 @@ func (az *azureSecrets) DeleteSecret(
 	secretName string,
 	keyContext map[string]string,
 ) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 6000*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout*time.Second)
 	defer cancel()
 
 	if secretName == "" {
