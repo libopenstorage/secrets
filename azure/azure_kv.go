@@ -26,7 +26,7 @@ const (
 	// AzureVaultURI of azure key vault
 	AzureVaultURL = "AZURE_VAULT_URL"
 	// Default context timeout for Azure SDK API's
-	defaultTimeout = 6000
+	defaultTimeout = 6000 * time.Second
 )
 
 var (
@@ -86,7 +86,7 @@ func (az *azureSecrets) GetSecret(
 	secretID string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	if secretID == "" {
@@ -115,7 +115,7 @@ func (az *azureSecrets) PutSecret(
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	if secretName == "" {
@@ -139,7 +139,7 @@ func (az *azureSecrets) DeleteSecret(
 	secretName string,
 	keyContext map[string]string,
 ) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	if secretName == "" {
