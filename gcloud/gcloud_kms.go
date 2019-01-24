@@ -118,7 +118,7 @@ func (g *gcloudKmsSecrets) GetSecret(
 	response, err := g.kms.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
 		AsymmetricDecrypt(g.publicKeyPath, decryptRequest).Context(ctx).Do()
 	if err != nil {
-		return nil, fmt.Errorf("decryption request failed: %v", err)
+		return nil, fmt.Errorf("decryption request failed: %v", err.Error())
 	}
 	plaintext, err := base64.StdEncoding.DecodeString(response.Plaintext)
 	if err != nil {
@@ -232,7 +232,7 @@ func (g *gcloudKmsSecrets) getAsymmetricPublicKey() (interface{}, error) {
 	ctx := context.Background()
 	response, err := g.kms.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.GetPublicKey(g.publicKeyPath).Context(ctx).Do()
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch public key: %v", err)
+		return nil, fmt.Errorf("failed to fetch public key: %v", err.Error())
 	}
 	keyBytes := []byte(response.Pem)
 	block, _ := pem.Decode(keyBytes)
