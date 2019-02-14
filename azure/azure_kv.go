@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/keyvault/2016-10-01/keyvault"
 	"github.com/libopenstorage/secrets"
+	"github.com/portworx/sched-ops/task"
 )
 
 const (
@@ -26,7 +27,11 @@ const (
 	// AzureVaultURI of azure key vault
 	AzureVaultURL = "AZURE_VAULT_URL"
 	// Default context timeout for Azure SDK API's
-	defaultTimeout = 6000 * time.Second
+	defaultTimeout = 30 * time.Second
+	// timeout
+	timeout = 8 * time.Second
+	// retrytimeout
+	retryTimeout = 4 * time.Second
 )
 
 var (
@@ -92,11 +97,20 @@ func (az *azureSecrets) GetSecret(
 	if secretID == "" {
 		return nil, secrets.ErrEmptySecretId
 	}
-	secretResp, err := az.kv.GetSecret(ctx, az.baseURL, secretID, "")
+
+	t := func() (interface{}, bool, error) {
+		secretResp, err := az.kv.GetSecret(ctx, az.baseURL, secretID, "")
+		if err != nil {
+			return nil, true, err
+		}
+		return secretResp, false, nil
+	}
+	resp, err := task.DoRetryWithTimeout(t, timeout, retryTimeout)
 	if err != nil {
 		return nil, err
 	}
 
+	secretResp := resp.(keyvault.SecretBundle)
 	if secretResp.Value == nil {
 		return nil, ErrInvalidSecretResp
 	}
@@ -118,6 +132,7 @@ func (az *azureSecrets) PutSecret(
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
+	var secretResp keyvault.SecretBundle
 	if secretName == "" {
 		return secrets.ErrEmptySecretId
 	}
@@ -129,9 +144,17 @@ func (az *azureSecrets) PutSecret(
 	if err != nil {
 		return err
 	}
-	_, err = az.kv.SetSecret(ctx, az.baseURL, secretName, keyvault.SecretSetParameters{
-		Value: to.StringPtr(string(value)),
-	})
+
+	t := func() (interface{}, bool, error) {
+		secretResp, err = az.kv.SetSecret(ctx, az.baseURL, secretName, keyvault.SecretSetParameters{
+			Value: to.StringPtr(string(value)),
+		})
+		if err != nil {
+			return nil, true, err
+		}
+		return secretResp, false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, timeout, retryTimeout)
 
 	return err
 }
