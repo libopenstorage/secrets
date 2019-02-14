@@ -110,8 +110,8 @@ func (az *azureSecrets) GetSecret(
 		return nil, err
 	}
 
-	secretResp := resp.(keyvault.SecretBundle)
-	if secretResp.Value == nil {
+	secretResp, ok := resp.(keyvault.SecretBundle)
+	if !ok || secretResp.Value == nil {
 		return nil, ErrInvalidSecretResp
 	}
 	secretData := make(map[string]interface{})
