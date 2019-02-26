@@ -66,7 +66,7 @@ func New(
 	if secretID == "" {
 		return nil, ErrAzureSecretIDNotSet
 	}
-	envName := getAzureKVParams(secretConfig, "AZURE_ENVIORNMENT")
+	envName := getAzureKVParams(secretConfig, "AZURE_ENVIRONMENT")
 	if envName == "" {
 		// we set back to default AzurePublicCloud
 		envName = AzureCloud
