@@ -23,7 +23,7 @@ const (
 	// AzureClientSecret of service principal account
 	AzureClientSecret = "AZURE_CLIENT_SECRET"
 	// AzureEnviornment to connect
-	AzureEnviornment = "AZURE_ENVIORNMENT"
+	AzureEnviornment = "AZURE_ENVIRONMENT"
 	// AzureVaultURI of azure key vault
 	AzureVaultURL = "AZURE_VAULT_URL"
 	// Default context timeout for Azure SDK API's
@@ -54,31 +54,31 @@ func New(
 	secretConfig map[string]interface{},
 ) (secrets.Secrets, error) {
 
-	tenantID := getAzureKVParams(secretConfig, "AZURE_TENANT_ID")
+	tenantID := getAzureKVParams(secretConfig, AzureTenantID)
 	if tenantID == "" {
 		return nil, ErrAzureTenantIDNotSet
 	}
-	clientID := getAzureKVParams(secretConfig, "AZURE_CLIENT_ID")
+	clientID := getAzureKVParams(secretConfig, AzureClientID)
 	if clientID == "" {
 		return nil, ErrAzureClientIDNotSet
 	}
-	secretID := getAzureKVParams(secretConfig, "AZURE_CLIENT_SECRET")
+	secretID := getAzureKVParams(secretConfig, AzureClientSecret)
 	if secretID == "" {
 		return nil, ErrAzureSecretIDNotSet
 	}
-	envName := getAzureKVParams(secretConfig, "AZURE_ENVIRONMENT")
+	envName := getAzureKVParams(secretConfig, AzureEnviornment)
 	if envName == "" {
 		// we set back to default AzurePublicCloud
 		envName = AzureCloud
 	}
-	vaultURL := getAzureKVParams(secretConfig, "AZURE_VAULT_URL")
+	vaultURL := getAzureKVParams(secretConfig, AzureVaultURL)
 	if vaultURL == "" {
 		return nil, ErrAzureVaultURLNotSet
 	}
 
 	client, err := getAzureVaultClient(clientID, secretID, tenantID, envName)
 	if err != nil {
-		return nil, ErrAzureAuthentication
+		return nil, err
 	}
 
 	return &azureSecrets{
