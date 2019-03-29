@@ -40,8 +40,6 @@ var (
 	ErrAwsAccessKeyNotSet = errors.New("AWS_ACCESS_KEY_ID not set.")
 	// ErrAwsSecretAccessKeyNotSet is returned when AWS credential for SECRET_KEY is not set
 	ErrAwsSecretAccessKeyNotSet = errors.New("AWS_SECRET_ACCESS_KEY not set.")
-	// ErrInvalidSecret is returned when no secret data is found for given secret id
-	ErrInvalidSecretId = errors.New("No Secret Data found for Secret Id")
 	// ErrCMKNotProvided is returned when CMK is not provided.
 	ErrCMKNotProvided = errors.New("AWS CMK not provided. Cannot perform KMS operations.")
 	// ErrAWSRegionNotProvided is returned when region is not provided.
@@ -136,6 +134,8 @@ func (a *awsKmsSecrets) GetSecret(
 		secretData                    map[string]interface{}
 	)
 
+	_, publicData := keyContext[secrets.PublicSecretData]
+
 	if exists, err := a.ps.Exists(secretId); err != nil {
 		return nil, err
 	} else if !exists {
@@ -146,6 +146,13 @@ func (a *awsKmsSecrets) GetSecret(
 	if err != nil {
 		return nil, err
 	}
+
+	if publicData {
+		secretData := make(map[string]interface{})
+		secretData[secretId] = cipherBlob
+		return secretData, nil
+	}
+
 	// AWS KMS api requires the cipherBlob to be in base64 decoded format.
 	// Check if it is encoded and decode if required.
 	decodedCipherBlob, err = base64.StdEncoding.DecodeString(string(cipherBlob))
@@ -187,6 +194,31 @@ func (a *awsKmsSecrets) PutSecret(
 	keyContext map[string]string,
 ) error {
 
+	_, publicData := keyContext[secrets.PublicSecretData]
+
+	if publicData && len(secretData) == 0 {
+		return &secrets.ErrInvalidKeyContext{
+			Reason: "secret data needs to be provided when PublicSecretData flag is set",
+		}
+	} else if publicData && len(secretData) > 0 {
+		publicDek, ok := secretData[secretId]
+		if !ok {
+			return secrets.ErrInvalidSecretData
+		}
+		dek, ok := publicDek.([]byte)
+		if !ok {
+			return &secrets.ErrInvalidKeyContext{
+				Reason: "secret data when PublicSecretData flag is set should be of the type []byte",
+			}
+		}
+		return a.ps.Set(
+			secretId,
+			dek, // only store the public cipher text in store
+			nil, // do not use the plain text to encrypt the secret data
+			nil, // no secret data to encrypt
+		)
+	}
+
 	keySpec := "AES_256"
 	input := &kms.GenerateDataKeyInput{
 		KeyId:             &a.cmk,
@@ -201,9 +233,9 @@ func (a *awsKmsSecrets) PutSecret(
 
 	return a.ps.Set(
 		secretId,
-		output.CiphertextBlob,
-		output.Plaintext,
-		secretData,
+		output.CiphertextBlob, // store the public cipher text in store
+		output.Plaintext,      // use the plain text to encrypt secret data if provided
+		secretData,            // encrypt this secret data and store it
 	)
 }
 
@@ -281,6 +313,10 @@ func getAWSKeyContext(keyContext map[string]string) map[string]*string {
 	}
 	encKeyContext := make(map[string]*string)
 	for k, v := range keyContext {
+		if k == secrets.CustomSecretData || k == secrets.PublicSecretData {
+			// Do not add our keys to aws context
+			continue
+		}
 		encKeyContext[k] = &v
 	}
 	return encKeyContext

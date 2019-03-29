@@ -14,6 +14,7 @@ import (
 const (
 	secretIdWithData    = "openstorage_secret_data"
 	secretIdWithoutData = "openstorage_secret"
+	secretIdWithPublic  = "openstorage_secret_with_public"
 )
 
 func TestAll(t *testing.T) {
@@ -24,13 +25,6 @@ func TestAll(t *testing.T) {
 	secretConfig[AwsRegionKey] = os.Getenv(AwsRegionKey)
 
 	os.RemoveAll(secrets.SecretPath + secretIdWithoutData)
-	// With filePersistenceStore
-	as, err := NewAwsSecretTest(secretConfig)
-	if err != nil {
-		t.Fatalf("Unable to create a AWS Secret instance: %v", err)
-		return
-	}
-	test.Run(as, t)
 
 	// With kvdbPersistenceStore
 	kv, err := kvdb.New(mem.Name, "openstorage/", nil, nil, nil)
@@ -39,7 +33,7 @@ func TestAll(t *testing.T) {
 		return
 	}
 	secretConfig[KMSKvdbKey] = kv
-	as, err = NewAwsSecretTest(secretConfig)
+	as, err := NewAwsSecretTest(secretConfig)
 	if err != nil {
 		t.Fatalf("Unable to create a AWS Secret instance: %v", err)
 		return
@@ -74,12 +68,24 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 	assert.NoError(t, err, "Expected PutSecret to succeed. Failed with error: %v", err)
 	a.totalPuts++
 
-	// PutSecret with already existing secretId
-	err = a.s.PutSecret(secretIdWithData, secretData, nil)
-	assert.EqualError(t, secrets.ErrSecretExists, err.Error(), "Expected PutSecret to fail with ErrSecretExists error")
+	// PublicSecretData with no data
+	keyContext := make(map[string]string)
+	keyContext[secrets.PublicSecretData] = "true"
+	err = a.s.PutSecret(secretIdWithPublic, nil, keyContext)
+	errInvalidContext, ok := err.(*secrets.ErrInvalidKeyContext)
+	assert.True(t, ok, "Unexpected error on PutSecret")
+	assert.Contains(t, errInvalidContext.Error(), "secret data needs to be provided", "Unexpected error on PutSecret")
 
-	err = a.s.PutSecret(secretIdWithoutData, nil, nil)
-	assert.EqualError(t, secrets.ErrSecretExists, err.Error(), "Expected PutSecret to fail with ErrSecretExists error")
+	// Successful PutSecret with PublicSecretData
+	getKC := make(map[string]string)
+	getKC[secrets.PublicSecretData] = "true"
+	secretData, err = a.s.GetSecret(secretIdWithoutData, getKC)
+	dek := secretData[secretIdWithoutData]
+	putSecretData := make(map[string]interface{})
+	putSecretData[secretIdWithPublic] = dek
+	err = a.s.PutSecret(secretIdWithPublic, putSecretData, keyContext)
+	assert.NoError(t, err, "Unexpected error on PutSecret")
+	a.totalPuts++
 
 	return nil
 }
@@ -102,6 +108,22 @@ func (a *awsSecretTest) TestGetSecret(t *testing.T) error {
 	// GetSecret using a secretId without data
 	_, err = a.s.GetSecret(secretIdWithoutData, nil)
 	assert.NoError(t, err, "Expected GetSecret to succeed")
+
+	// GetSecret using the secretID for public
+	keyContext := make(map[string]string)
+	keyContext[secrets.PublicSecretData] = "true"
+	// deks for both secrets should match
+	sec1, err := a.s.GetSecret(secretIdWithoutData, keyContext)
+	assert.NoError(t, err, "Unexpected error on GetSecret")
+	dek1, ok := sec1[secretIdWithoutData]
+	assert.True(t, ok, "Unexpected secret returned")
+
+	sec2, err := a.s.GetSecret(secretIdWithPublic, keyContext)
+	assert.NoError(t, err, "Unexpected error on GetSecret")
+	dek2, ok := sec2[secretIdWithPublic]
+	assert.True(t, ok, "Unexpected secret returned")
+
+	assert.Equal(t, dek1, dek2, "Unequal secrets returned.")
 	return nil
 }
 
@@ -119,7 +141,7 @@ func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 
 	// Get of a deleted key should fail
 	_, err = a.s.GetSecret(secretIdWithData, nil)
-	assert.EqualError(t, ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret after delete")
+	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret after delete")
 
 	// Delete of a non-existent key should also succeed
 	err = a.s.DeleteSecret("dummy", nil)
