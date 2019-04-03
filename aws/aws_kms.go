@@ -36,10 +36,6 @@ const (
 )
 
 var (
-	// ErrAwsAccessKeyNotSet is returned when AWS credential for ACCESS_KEY is not set
-	ErrAwsAccessKeyNotSet = errors.New("AWS_ACCESS_KEY_ID not set.")
-	// ErrAwsSecretAccessKeyNotSet is returned when AWS credential for SECRET_KEY is not set
-	ErrAwsSecretAccessKeyNotSet = errors.New("AWS_SECRET_ACCESS_KEY not set.")
 	// ErrCMKNotProvided is returned when CMK is not provided.
 	ErrCMKNotProvided = errors.New("AWS CMK not provided. Cannot perform KMS operations.")
 	// ErrAWSRegionNotProvided is returned when region is not provided.

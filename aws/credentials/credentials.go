@@ -4,11 +4,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-        "github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/session"
 )
 
 type AWSCredentials interface {
@@ -36,12 +36,12 @@ func NewAWSCredentials(id, secret, token string) (AWSCredentials, error) {
 		res, err := client.Get(url)
 		if err == nil {
 			sess := session.Must(session.NewSession())
-                        ec2RoleProvider := &ec2rolecreds.EC2RoleProvider{
+			ec2RoleProvider := &ec2rolecreds.EC2RoleProvider{
 				Client: ec2metadata.New(sess, &aws.Config{
 					HTTPClient: &client,
-                                }),
-                        }
-                        providers = append(providers, ec2RoleProvider)
+				}),
+			}
+			providers = append(providers, ec2RoleProvider)
 			res.Body.Close()
 		}
 		providers = append(providers, &credentials.SharedCredentialsProvider{})
