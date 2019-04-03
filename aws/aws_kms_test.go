@@ -74,7 +74,16 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 	err = a.s.PutSecret(secretIdWithPublic, nil, keyContext)
 	errInvalidContext, ok := err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
-	assert.Contains(t, errInvalidContext.Error(), "secret data needs to be provided", "Unexpected error on PutSecret")
+	assert.Contains(t, errInvalidContext.Error(),
+		"secret data needs to be provided", "Unexpected error on PutSecret")
+
+	// PublicSecretData with invalid data
+	invalidData := map[string]interface{}{secretIdWithPublic: true}
+	err = a.s.PutSecret(secretIdWithPublic, invalidData, keyContext)
+	errInvalidContext, ok = err.(*secrets.ErrInvalidKeyContext)
+	assert.True(t, ok, "Unexpected error on PutSecret")
+	assert.Contains(t, errInvalidContext.Error(),
+		"should be of the type []byte", "Unexpected error on PutSecret")
 
 	// Successful PutSecret with PublicSecretData
 	getKC := make(map[string]string)
@@ -91,8 +100,13 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 }
 
 func (a *awsSecretTest) TestGetSecret(t *testing.T) error {
+	invalidKeyContext := map[string]string{"key": "invalid"}
 	// GetSecret with non-existant id
 	_, err := a.s.GetSecret("dummy", nil)
+	assert.Error(t, err, "Expected GetSecret to fail")
+
+	// GetSecret with different key context from PutSecret should fail
+	_, err = a.s.GetSecret(secretIdWithData, invalidKeyContext)
 	assert.Error(t, err, "Expected GetSecret to fail")
 
 	// GetSecret using a secretId with data
@@ -117,6 +131,13 @@ func (a *awsSecretTest) TestGetSecret(t *testing.T) error {
 	assert.NoError(t, err, "Unexpected error on GetSecret")
 	dek1, ok := sec1[secretIdWithoutData]
 	assert.True(t, ok, "Unexpected secret returned")
+
+	// GetSecret with different key context from PutSecret should fail
+	_, err = a.s.GetSecret(secretIdWithPublic, invalidKeyContext)
+	assert.Error(t, err, "Expected GetSecret to fail")
+	// GetSecret with nil key context passes although PutSecret had key context
+	_, err = a.s.GetSecret(secretIdWithPublic, nil)
+	assert.NoError(t, err, "Unexpected error on GetSecret")
 
 	sec2, err := a.s.GetSecret(secretIdWithPublic, keyContext)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
