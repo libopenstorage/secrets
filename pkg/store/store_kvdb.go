@@ -95,8 +95,11 @@ func (k *kvdbPersistenceStore) Set(
 	key := k.kvdbPublicBasePath + secretId
 	encodeCipher := base64.StdEncoding.EncodeToString(cipher)
 	// Save the public cipher
-	_, err := k.kv.Put(key, encodeCipher, 0)
+	_, err := k.kv.Create(key, encodeCipher, 0)
 	if err != nil {
+		if err == kvdb.ErrExist {
+			return fmt.Errorf("secret with name %v already exists", secretId)
+		}
 		return err
 	}
 
@@ -122,8 +125,11 @@ func (k *kvdbPersistenceStore) Set(
 	encodedEncryptedData := base64.StdEncoding.EncodeToString(encryptedData)
 
 	dataKey := k.kvdbDataBasePath + secretId
-	_, err = k.kv.Put(dataKey, encodedEncryptedData, 0)
+	_, err = k.kv.Create(dataKey, encodedEncryptedData, 0)
 	if err != nil {
+		if err == kvdb.ErrExist {
+			return fmt.Errorf("secret with name %v already exists.", secretId)
+		}
 		return err
 	}
 	return nil
