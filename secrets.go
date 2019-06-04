@@ -33,6 +33,10 @@ const (
 	// It indicates that the API is dealing with the public part of a secret instead
 	// of the actual secret
 	PublicSecretData = "public_secret_data"
+	// OverwriteSecretDataInStore is a constant used in the key context of Secret APIs
+	// It indicates whether the secret data stored in the persistent store can
+	// be overwritten
+	OverwriteSecretDataInStore = "overwrite_secret_data_in_store"
 )
 
 // Secrets interface implemented by backend Key Management Systems (KMS)

@@ -144,6 +144,7 @@ func (g *gcloudKmsSecrets) PutSecret(
 	var (
 		dek []byte
 	)
+	_, override := keyContext[secrets.OverwriteSecretDataInStore]
 	_, customData := keyContext[secrets.CustomSecretData]
 	_, publicData := keyContext[secrets.PublicSecretData]
 
@@ -187,6 +188,7 @@ func (g *gcloudKmsSecrets) PutSecret(
 		dek,
 		nil,
 		nil,
+		override,
 	)
 }
 

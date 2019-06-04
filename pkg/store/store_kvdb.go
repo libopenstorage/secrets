@@ -91,14 +91,20 @@ func (k *kvdbPersistenceStore) Set(
 	cipher []byte,
 	plain []byte,
 	secretData map[string]interface{},
+	override bool,
 ) error {
 	key := k.kvdbPublicBasePath + secretId
 	encodeCipher := base64.StdEncoding.EncodeToString(cipher)
 	// Save the public cipher
 	_, err := k.kv.Create(key, encodeCipher, 0)
 	if err != nil {
-		if err == kvdb.ErrExist {
+		if err == kvdb.ErrExist && !override {
 			return fmt.Errorf("secret with name %v already exists", secretId)
+		} else if err == kvdb.ErrExist && override {
+			_, err = k.kv.Put(key, encodeCipher, 0)
+			if err != nil {
+				return err
+			}
 		}
 		return err
 	}
@@ -127,8 +133,13 @@ func (k *kvdbPersistenceStore) Set(
 	dataKey := k.kvdbDataBasePath + secretId
 	_, err = k.kv.Create(dataKey, encodedEncryptedData, 0)
 	if err != nil {
-		if err == kvdb.ErrExist {
+		if err == kvdb.ErrExist && !override {
 			return fmt.Errorf("secret with name %v already exists.", secretId)
+		} else if err == kvdb.ErrExist && override {
+			_, err = k.kv.Put(dataKey, encodedEncryptedData, 0)
+			if err != nil {
+				return err
+			}
 		}
 		return err
 	}

@@ -42,6 +42,7 @@ func (f *filePersistenceStore) Set(
 	cipher []byte,
 	plain []byte,
 	secretData map[string]interface{},
+	override bool,
 ) error {
 	if secretData != nil {
 		return ErrInvalidRequest

@@ -190,6 +190,7 @@ func (a *awsKmsSecrets) PutSecret(
 	keyContext map[string]string,
 ) error {
 
+	_, override := keyContext[secrets.OverwriteSecretDataInStore]
 	_, publicData := keyContext[secrets.PublicSecretData]
 
 	if publicData && len(secretData) == 0 {
@@ -212,6 +213,7 @@ func (a *awsKmsSecrets) PutSecret(
 			dek, // only store the public cipher text in store
 			nil, // do not use the plain text to encrypt the secret data
 			nil, // no secret data to encrypt
+			override,
 		)
 	}
 
@@ -232,6 +234,7 @@ func (a *awsKmsSecrets) PutSecret(
 		output.CiphertextBlob, // store the public cipher text in store
 		output.Plaintext,      // use the plain text to encrypt secret data if provided
 		secretData,            // encrypt this secret data and store it
+		override,
 	)
 }
 
@@ -309,7 +312,9 @@ func getAWSKeyContext(keyContext map[string]string) map[string]*string {
 	}
 	encKeyContext := make(map[string]*string)
 	for k, v := range keyContext {
-		if k == secrets.CustomSecretData || k == secrets.PublicSecretData {
+		if k == secrets.CustomSecretData ||
+			k == secrets.PublicSecretData ||
+			k == secrets.OverwriteSecretDataInStore {
 			// Do not add our keys to aws context
 			continue
 		}
