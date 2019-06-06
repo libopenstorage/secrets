@@ -178,6 +178,7 @@ func (i *ibmKPSecret) PutSecret(
 		err error
 	)
 
+	_, override := keyContext[secrets.OverwriteSecretDataInStore]
 	_, customData := keyContext[secrets.CustomSecretData]
 	_, publicData := keyContext[secrets.PublicSecretData]
 
@@ -226,6 +227,7 @@ func (i *ibmKPSecret) PutSecret(
 		dek,
 		nil,
 		nil,
+		override,
 	)
 }
 
