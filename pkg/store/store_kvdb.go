@@ -105,8 +105,9 @@ func (k *kvdbPersistenceStore) Set(
 			if err != nil {
 				return err
 			}
+		} else {
+			return err
 		}
-		return err
 	}
 
 	// If no secretData is provided no need to store it.
@@ -140,8 +141,9 @@ func (k *kvdbPersistenceStore) Set(
 			if err != nil {
 				return err
 			}
+		} else {
+			return err
 		}
-		return err
 	}
 	return nil
 }
