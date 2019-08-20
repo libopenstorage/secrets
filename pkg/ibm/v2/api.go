@@ -390,7 +390,9 @@ func (a *API) doHTTPRequest(ctx context.Context, method, base string, id *string
 		if err != nil {
 			return err
 		}
+		request.Header.Add("Content-Length", strconv.Itoa(len(reqBody)))
 		request.Body = ioutil.NopCloser(bytes.NewReader(reqBody))
+
 		defer request.Body.Close()
 	}
 
@@ -445,6 +447,7 @@ func (a *API) doPolicyHTTPRequest(ctx context.Context, method, base string, id *
 		if err != nil {
 			return err
 		}
+		request.Header.Add("Content-Length", strconv.Itoa(len(reqBody)))
 		request.Body = ioutil.NopCloser(bytes.NewReader(reqBody))
 		defer request.Body.Close()
 	}
@@ -574,8 +577,9 @@ func (a *API) getAccessToken(ctx context.Context) (string, error) {
 		Method: "POST",
 		URL:    u,
 		Header: http.Header{
-			"Content-Type": {"application/x-www-form-urlencoded"},
-			"Accept":       {"application/json"},
+			"Content-Type":   {"application/x-www-form-urlencoded"},
+			"Accept":         {"application/json"},
+			"Content-Length": {strconv.Itoa(len(reqBody))},
 		},
 		Body: ioutil.NopCloser(bytes.NewReader(reqBody)),
 	}
