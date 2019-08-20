@@ -1,0 +1,15 @@
+package: .
+import:
+- package: go.uber.org/zap
+  version: v1.7.1
+- package: go.uber.org/atomic
+  version: v1.3.1
+- package: gopkg.in/h2non/gock.v1
+  version: v1.0.8
+- package: go.uber.org/zap
+  version: v1.7.1
+testImport:
+- package: github.com/stretchr/testify
+  subpackages:
+  - assert
+  

@@ -1,0 +1,31 @@
+language: go
+go:
+    - '1.10.2'
+
+sudo: required
+
+matrix:
+  fast_finish: true
+  allow_failures:
+    - go: tip
+
+
+# leave blank to prevent go get -u ./... and use glide instead
+before_script:
+  # install Glide
+  - go get github.com/Masterminds/glide
+  # install gotestcover
+  - go get github.com/pierrre/gotestcover
+
+script:
+  # replaces go get -u ./...
+  - glide install
+  # Run the unit tests suite
+  - $GOPATH/bin/gotestcover -v -race -coverprofile=cover.out $(go list ./... | grep -v /vendor/ | grep -v scripts)
+  # Run Test Coverage
+  - go tool cover -html=cover.out -o=cover.html
+
+
+after_success:
+  - ./scripts/calculateCoverage.sh
+  - ./scripts/publishCoverage.sh
