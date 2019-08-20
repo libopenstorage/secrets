@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/libopenstorage/secrets"
-	"github.com/libopenstorage/secrets/pkg/ibm"
+	ibm "github.com/libopenstorage/secrets/pkg/ibm/v2"
 	"github.com/libopenstorage/secrets/pkg/store"
 	"github.com/portworx/kvdb"
 	"github.com/sirupsen/logrus"
@@ -105,7 +105,7 @@ func New(
 		Verbose:    ibm.VerboseAll,
 		Timeout:    kpClientTimeout,
 	}
-	kp, err := ibm.NewAPIWithLogger(cc, nil, logrus.StandardLogger())
+	kp, err := ibm.NewWithLogger(cc, nil, logrus.StandardLogger())
 	if err != nil {
 		return nil, err
 	}
