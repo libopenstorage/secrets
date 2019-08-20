@@ -10,7 +10,7 @@ const (
 	// DefaultBaseURL ...
 	DefaultBaseURL = "https://keyprotect.us-south.bluemix.net"
 	// DefaultTokenURL ..
-	DefaultTokenURL = "https://iam.bluemix.net/oidc/token"
+	DefaultTokenURL = "https://iam.cloud.ibm.com/identity/token"
 
 	// VerboseNone ...
 	VerboseNone = 0
