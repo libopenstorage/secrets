@@ -19,7 +19,7 @@ const (
 
 const (
 	// Name name of the secret provider
-	Name = "dcos"
+	Name = secrets.TypeDCOS
 	// KeySecretStore key used to set the secret store
 	KeySecretStore = "secret_store"
 )

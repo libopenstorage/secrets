@@ -39,6 +39,18 @@ const (
 	OverwriteSecretDataInStore = "overwrite_secret_data_in_store"
 )
 
+const (
+	TypeAWS    = "aws-kms"
+	TypeAzure  = "azure-kv"
+	TypeDCOS   = "dcos"
+	TypeDocker = "docker"
+	TypeGCloud = "gcloud-kms"
+	TypeIBM    = "ibm-kp"
+	TypeK8s    = "k8s"
+	TypeKVDB   = "kvdb"
+	TypeVault  = "vault"
+)
+
 // Secrets interface implemented by backend Key Management Systems (KMS)
 type Secrets interface {
 	// String representation of the backend KMS

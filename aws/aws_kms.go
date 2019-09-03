@@ -18,7 +18,7 @@ import (
 
 const (
 	// Name of the secret store
-	Name = "aws-kms"
+	Name = secrets.TypeAWS
 	// AwsAccessKey corresponds to AWS credential AWS_ACCESS_KEY_ID
 	AwsAccessKey = "AWS_ACCESS_KEY_ID"
 	// AwsSecretAccessKey corresponds to AWS credential AWS_SECRET_ACCESS_KEY

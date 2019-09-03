@@ -22,7 +22,7 @@ import (
 
 const (
 	// Name of the secret store
-	Name = "gcloud-kms"
+	Name = secrets.TypeGCloud
 	// GoogleKmsResourceKey corresponds to the asymmetric resource id
 	GoogleKmsResourceKey = "GOOGLE_KMS_RESOURCE_ID"
 	// KMSKvdbkey is used to setup Google KMS Secret Store with kvdb for persistence

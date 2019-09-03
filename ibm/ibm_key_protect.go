@@ -18,7 +18,7 @@ import (
 
 const (
 	// Name of the secret store
-	Name = "ibm-kp"
+	Name = secrets.TypeIBM
 	// IbmServiceApiKey is the service ID API Key
 	IbmServiceApiKey = "IBM_SERVICE_API_KEY"
 	// IbmInstanceIdKey is the Key Protect Service's Instance ID

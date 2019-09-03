@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	Name             = "docker"
+	Name             = secrets.TypeDocker
 	DockerSecretPath = "/run/secrets/"
 )
 
