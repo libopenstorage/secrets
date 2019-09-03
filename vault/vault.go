@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	Name                = "vault"
+	Name                = secrets.TypeVault
 	DefaultBackendPath  = "secret/"
 	VaultBackendPathKey = "VAULT_BACKEND_PATH"
 	vaultAddressPrefix  = "http"

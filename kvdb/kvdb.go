@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	Name      = "kvdb"
+	Name      = secrets.TypeKVDB
 	KvdbKey   = "KVDB"
 	SecretKey = "secret/"
 )
