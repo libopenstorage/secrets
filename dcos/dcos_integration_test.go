@@ -24,10 +24,19 @@ func NewDCOSSecretTest(secretConfig map[string]interface{}) (test.SecretTest, er
 // TestAll needs the below environment variables to be set to test against
 // a enterprise DC/OS cluster as these are integration tests.
 func TestAll(t *testing.T) {
+	// You can also populate the DCOS_SECRETS_USERNAME, DCOS_SECRETS_PASSWORD and
+	// DCOS_CLUSTER_URL environment variables. These are the actual env variables
+	// that will be checked if secret config does not have the creds.
 	secretConfig := make(map[string]interface{})
-	secretConfig[KeyUsername] = os.Getenv("DCOS_SECRETS_TEST_USERNAME")
-	secretConfig[KeyPassword] = os.Getenv("DCOS_SECRETS_TEST_PASSWORD")
-	secretConfig[KeyDcosURL] = os.Getenv("DCOS_SECRETS_TEST_CLUSTER_URL")
+	if os.Getenv("DCOS_SECRETS_TEST_USERNAME") != "" {
+		secretConfig[EnvSecretsUsername] = os.Getenv("DCOS_SECRETS_TEST_USERNAME")
+	}
+	if os.Getenv("DCOS_SECRETS_TEST_PASSWORD") != "" {
+		secretConfig[EnvSecretsPassword] = os.Getenv("DCOS_SECRETS_TEST_PASSWORD")
+	}
+	if os.Getenv("DCOS_SECRETS_TEST_CLUSTER_URL") != "" {
+		secretConfig[EnvDCOSClusterURL] = os.Getenv("DCOS_SECRETS_TEST_CLUSTER_URL")
+	}
 
 	ds, err := NewDCOSSecretTest(secretConfig)
 	if err != nil {
@@ -91,11 +100,11 @@ func (d *dcosSecretTest) TestDeleteSecret(t *testing.T) error {
 
 	// Get of a deleted key should fail
 	_, err = d.s.GetSecret("osd/test/secret_with_default_store", nil)
-	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Expected an error on GetSecret after the key is deleted")
+	assert.Contains(t, err.Error(), "does not exist", "Expected an error on GetSecret after the key is deleted")
 
-	// Delete of a non-existent key should also succeed
+	// Delete of a non-existent key should fail
 	err = d.s.DeleteSecret("dummy", nil)
-	assert.NoError(t, err, "Unepxected error on DeleteSecret")
+	assert.Contains(t, err.Error(), "does not exist", "Unepxected error on DeleteSecret")
 	return nil
 
 }

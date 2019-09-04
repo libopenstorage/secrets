@@ -2,6 +2,7 @@ package dcos
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -12,22 +13,43 @@ import (
 )
 
 func TestFailOnMissingCredentials(t *testing.T) {
+	origUsername := os.Getenv(EnvSecretsUsername)
+	origPassword := os.Getenv(EnvSecretsPassword)
+
+	os.Setenv(EnvSecretsUsername, "")
+	os.Setenv(EnvSecretsPassword, "")
+
 	secretConfig := make(map[string]interface{})
 	_, err := New(secretConfig)
 	assert.NotNil(t, err)
 	assert.Equal(t, ErrMissingCredentials, err)
 
 	secretConfig = make(map[string]interface{})
-	secretConfig[KeyUsername] = "username"
+	secretConfig[EnvSecretsUsername] = "username"
 	_, err = New(secretConfig)
 	assert.NotNil(t, err)
 	assert.Equal(t, ErrMissingCredentials, err)
 
 	secretConfig = make(map[string]interface{})
-	secretConfig[KeyPassword] = "password"
+	secretConfig[EnvSecretsPassword] = "password"
 	_, err = New(secretConfig)
 	assert.NotNil(t, err)
 	assert.Equal(t, ErrMissingCredentials, err)
+
+	os.Setenv(EnvSecretsUsername, "username")
+	_, err = New(nil)
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrMissingCredentials, err)
+	os.Unsetenv(EnvSecretsUsername)
+
+	os.Setenv(EnvSecretsPassword, "password")
+	_, err = New(nil)
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrMissingCredentials, err)
+	os.Unsetenv(EnvSecretsPassword)
+
+	os.Setenv(EnvSecretsUsername, origUsername)
+	os.Setenv(EnvSecretsPassword, origPassword)
 }
 
 func TestGetSecretWhenClientReturnsError(t *testing.T) {
@@ -132,6 +154,53 @@ func TestGetSecretWithJSONData(t *testing.T) {
 	assert.Equal(t, float64(10), secretData["numeric"])
 }
 
+func TestGetSecretWhenTokenExpires(t *testing.T) {
+	mockClient := getMockDCOSSecretsClient(t)
+	s := getMockDCOSSecrets(mockClient)
+	newClient = func(_ map[string]interface{}) (api.DCOSSecrets, error) {
+		return mockClient, nil
+	}
+
+	// Token expires but gets refreshed
+	secretPath := "path/to/string_secret"
+	secret := &api.Secret{
+		Value: "value",
+	}
+	gomock.InOrder(
+		mockClient.EXPECT().
+			GetSecret("", secretPath).
+			Return(nil, fmt.Errorf("401 Unauthorized")).
+			Times(1),
+		mockClient.EXPECT().
+			GetSecret("", secretPath).
+			Return(secret, nil).
+			Times(1),
+	)
+
+	secretData, err := s.GetSecret(secretPath, nil)
+
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(secretData))
+	assert.Equal(t, "value", secretData[secretPath])
+
+	// If token expires but call fails even after refresh, then don't retry again
+	gomock.InOrder(
+		mockClient.EXPECT().
+			GetSecret("", secretPath).
+			Return(nil, fmt.Errorf("401 Unauthorized")).
+			Times(1),
+		mockClient.EXPECT().
+			GetSecret("", secretPath).
+			Return(nil, fmt.Errorf("401 Unauthorized")).
+			Times(1),
+	)
+
+	secretData, err = s.GetSecret(secretPath, nil)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, "401 Unauthorized", err.Error())
+}
+
 func TestPutSecretWithEmptyData(t *testing.T) {
 	mockClient := getMockDCOSSecretsClient(t)
 	s := getMockDCOSSecrets(mockClient)
@@ -188,6 +257,151 @@ func TestPutSecretWithValidData(t *testing.T) {
 	err := s.PutSecret("path/to/secret", data, keyContext)
 
 	assert.Nil(t, err)
+}
+
+func TestPutSecretWhenTokenExpires(t *testing.T) {
+	mockClient := getMockDCOSSecretsClient(t)
+	s := getMockDCOSSecrets(mockClient)
+	newClient = func(_ map[string]interface{}) (api.DCOSSecrets, error) {
+		return mockClient, nil
+	}
+
+	// Token expires but gets refreshed
+	data := make(map[string]interface{})
+	data["alpha"] = "foo"
+	data["numeric"] = 10
+	gomock.InOrder(
+		mockClient.EXPECT().
+			CreateOrUpdateSecret("store",
+				"path/to/secret",
+				gomock.Eq(&api.Secret{
+					Value: `{"alpha":"foo","numeric":10}`,
+				})).
+			Return(fmt.Errorf("401 Unauthorized")).
+			Times(1),
+		mockClient.EXPECT().
+			CreateOrUpdateSecret("store",
+				"path/to/secret",
+				gomock.Eq(&api.Secret{
+					Value: `{"alpha":"foo","numeric":10}`,
+				})).
+			Return(nil).
+			Times(1),
+	)
+
+	keyContext := map[string]string{KeySecretStore: "store"}
+	err := s.PutSecret("path/to/secret", data, keyContext)
+
+	assert.Nil(t, err)
+
+	// If token expires but call fails even after refresh, then don't retry again
+	gomock.InOrder(
+		mockClient.EXPECT().
+			CreateOrUpdateSecret("store",
+				"path/to/secret",
+				gomock.Eq(&api.Secret{
+					Value: `{"alpha":"foo","numeric":10}`,
+				})).
+			Return(fmt.Errorf("401 Unauthorized")).
+			Times(1),
+		mockClient.EXPECT().
+			CreateOrUpdateSecret("store",
+				"path/to/secret",
+				gomock.Eq(&api.Secret{
+					Value: `{"alpha":"foo","numeric":10}`,
+				})).
+			Return(fmt.Errorf("401 Unauthorized")).
+			Times(1),
+	)
+
+	err = s.PutSecret("path/to/secret", data, keyContext)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, "401 Unauthorized", err.Error())
+}
+
+func TestDeleteSecretWhenClientReturnsError(t *testing.T) {
+	mockClient := getMockDCOSSecretsClient(t)
+	s := getMockDCOSSecrets(mockClient)
+
+	secretPath := "path/to/secret"
+	mockClient.EXPECT().
+		DeleteSecret("", secretPath).
+		Return(fmt.Errorf("delete error")).
+		Times(1)
+
+	err := s.DeleteSecret(secretPath, nil)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, "delete error", err.Error())
+}
+
+func TestDeleteSecret(t *testing.T) {
+	mockClient := getMockDCOSSecretsClient(t)
+	s := getMockDCOSSecrets(mockClient)
+
+	// Test without secret store / default secret store
+	secretPath := "path/to/secret"
+	mockClient.EXPECT().
+		DeleteSecret("", secretPath).
+		Return(nil).
+		Times(1)
+
+	err := s.DeleteSecret(secretPath, nil)
+
+	assert.Nil(t, err)
+
+	// Test with a given secret store
+	keyContext := map[string]string{KeySecretStore: "custom_store"}
+	mockClient.EXPECT().
+		DeleteSecret("custom_store", secretPath).
+		Return(nil).
+		Times(1)
+
+	err = s.DeleteSecret(secretPath, keyContext)
+
+	assert.Nil(t, err)
+}
+
+func TestDeleteSecretWhenTokenExpires(t *testing.T) {
+	mockClient := getMockDCOSSecretsClient(t)
+	s := getMockDCOSSecrets(mockClient)
+	newClient = func(_ map[string]interface{}) (api.DCOSSecrets, error) {
+		return mockClient, nil
+	}
+
+	secretPath := "path/to/secret"
+	gomock.InOrder(
+		mockClient.EXPECT().
+			DeleteSecret("", secretPath).
+			Return(fmt.Errorf("401 Unauthorized")).
+			Times(1),
+		mockClient.EXPECT().
+			DeleteSecret("", secretPath).
+			Return(nil).
+			Times(1),
+	)
+
+	err := s.DeleteSecret(secretPath, nil)
+
+	assert.Nil(t, err)
+
+	// Test with a given secret store
+	gomock.InOrder(
+		mockClient.EXPECT().
+			DeleteSecret("", secretPath).
+			Return(fmt.Errorf("401 Unauthorized")).
+			Times(1),
+		mockClient.EXPECT().
+			DeleteSecret("", secretPath).
+			Return(fmt.Errorf("401 Unauthorized")).
+			Times(1),
+	)
+
+	err = s.DeleteSecret(secretPath, nil)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, "401 Unauthorized", err.Error())
 }
 
 func getMockDCOSSecretsClient(t *testing.T) *mock.MockDCOSSecrets {
