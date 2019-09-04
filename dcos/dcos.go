@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/libopenstorage/secrets"
 	api "github.com/portworx/dcos-secrets"
@@ -11,10 +13,10 @@ import (
 
 // Keys for the config to initialize the DC/OS secrets client
 const (
-	KeyUsername   = "username"
-	KeyPassword   = "password"
-	KeyCACertFile = "cacert"
-	KeyDcosURL    = "dcos_url"
+	EnvSecretsUsername   = "DCOS_SECRETS_USERNAME"
+	EnvSecretsPassword   = "DCOS_SECRETS_PASSWORD"
+	EnvSecretsCACertFile = "DCOS_SECRETS_CA_CERT_FILE"
+	EnvDCOSClusterURL    = "DCOS_CLUSTER_URL"
 )
 
 const (
@@ -29,6 +31,12 @@ var (
 	ErrMissingCredentials = errors.New("Username and password are required to authenticate")
 )
 
+var (
+	// This is used for testing so that in tests we can override the newClient function
+	// to have custom behavior.
+	newClient = newSecretsClient
+)
+
 type dcosSecrets struct {
 	client api.DCOSSecrets
 }
@@ -36,32 +44,36 @@ type dcosSecrets struct {
 func New(
 	secretConfig map[string]interface{},
 ) (secrets.Secrets, error) {
-	clientConfig := getClientConfig(secretConfig)
-	token, err := getAuthToken(clientConfig, secretConfig)
+	client, err := newClient(secretConfig)
 	if err != nil {
 		return nil, err
 	}
-
-	clientConfig.ACSToken = token
-	client, err := api.NewClient(clientConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	return &dcosSecrets{
 		client: client,
 	}, nil
 }
 
+func newSecretsClient(
+	secretConfig map[string]interface{},
+) (api.DCOSSecrets, error) {
+	clientConfig := getClientConfig(secretConfig)
+	token, err := getAuthToken(clientConfig, secretConfig)
+	if err != nil {
+		return nil, err
+	}
+	clientConfig.ACSToken = token
+	return api.NewClient(clientConfig)
+}
+
 func getClientConfig(secretConfig map[string]interface{}) api.Config {
 	config := api.NewDefaultConfig()
 
-	url := getConfigParam(secretConfig, KeyDcosURL)
+	url := getConfigParam(secretConfig, EnvDCOSClusterURL)
 	if url != "" {
 		config.ClusterURL = url
 	}
 
-	caCertFile := getConfigParam(secretConfig, KeyCACertFile)
+	caCertFile := getConfigParam(secretConfig, EnvSecretsCACertFile)
 	if caCertFile != "" {
 		config.CACertFile = caCertFile
 	} else {
@@ -72,11 +84,11 @@ func getClientConfig(secretConfig map[string]interface{}) api.Config {
 }
 
 func getAuthToken(clientConfig api.Config, secretConfig map[string]interface{}) (string, error) {
-	username := getConfigParam(secretConfig, KeyUsername)
+	username := getConfigParam(secretConfig, EnvSecretsUsername)
 	if username == "" {
 		return "", ErrMissingCredentials
 	}
-	password := getConfigParam(secretConfig, KeyPassword)
+	password := getConfigParam(secretConfig, EnvSecretsPassword)
 	if password == "" {
 		return "", ErrMissingCredentials
 	}
@@ -104,7 +116,17 @@ func (d *dcosSecrets) GetSecret(
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
 	secret, err := d.client.GetSecret(keyContext[KeySecretStore], secretPath)
-	if err != nil {
+	if isTokenExpired(err) {
+		client, err := newClient(nil)
+		if err != nil {
+			return nil, err
+		}
+		d.client = client
+		secret, err = d.client.GetSecret(keyContext[KeySecretStore], secretPath)
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
 		return nil, err
 	}
 
@@ -139,14 +161,32 @@ func (d *dcosSecrets) PutSecret(
 	secret := &api.Secret{
 		Value: string(value),
 	}
-	return d.client.CreateOrUpdateSecret(keyContext[KeySecretStore], secretPath, secret)
+	err = d.client.CreateOrUpdateSecret(keyContext[KeySecretStore], secretPath, secret)
+	if isTokenExpired(err) {
+		client, err := newClient(nil)
+		if err != nil {
+			return err
+		}
+		d.client = client
+		return d.client.CreateOrUpdateSecret(keyContext[KeySecretStore], secretPath, secret)
+	}
+	return err
 }
 
 func (d *dcosSecrets) DeleteSecret(
 	secretPath string,
 	keyContext map[string]string,
 ) error {
-	return d.client.DeleteSecret(keyContext[KeySecretStore], secretPath)
+	err := d.client.DeleteSecret(keyContext[KeySecretStore], secretPath)
+	if isTokenExpired(err) {
+		client, err := newClient(nil)
+		if err != nil {
+			return err
+		}
+		d.client = client
+		return d.client.DeleteSecret(keyContext[KeySecretStore], secretPath)
+	}
+	return err
 }
 
 func (d *dcosSecrets) Encrypt(
@@ -185,7 +225,11 @@ func getConfigParam(secretConfig map[string]interface{}, key string) string {
 			return value
 		}
 	}
-	return ""
+	return os.Getenv(key)
+}
+
+func isTokenExpired(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "Unauthorized")
 }
 
 func init() {
