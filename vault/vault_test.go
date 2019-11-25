@@ -149,5 +149,51 @@ func TestNew(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.NotNil(t, client)
+
+	config = make(map[string]interface{})
+	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
+	config[api.EnvVaultToken] = "token"
+	config[VaultBackendKey] = "kv"
+	// Do not check backend version
+	backendVersionCheck := false
+	isKvV2 = func(*api.Client, string) (bool, error) {
+		backendVersionCheck = true
+		return true, nil
+	}
+	client, err = New(config)
+	assert.False(t, backendVersionCheck, "unexpected backend version check")
+	assert.Nil(t, err)
+	assert.NotNil(t, client)
+
+	config = make(map[string]interface{})
+	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
+	config[api.EnvVaultToken] = "token"
+	config[VaultBackendKey] = "kv-v2"
+	// Do not check backend version
+	backendVersionCheck = false
+	isKvV2 = func(*api.Client, string) (bool, error) {
+		backendVersionCheck = true
+		return true, nil
+	}
+	client, err = New(config)
+	assert.False(t, backendVersionCheck, "unexpected backend version check")
+	assert.Nil(t, err)
+	assert.NotNil(t, client)
+
+	config = make(map[string]interface{})
+	config[api.EnvVaultAddress] = "http://127.0.0.1:8200"
+	config[api.EnvVaultToken] = "token"
+	// Check backend version
+	backendVersionCheck = false
+	isKvV2 = func(*api.Client, string) (bool, error) {
+		backendVersionCheck = true
+		return true, nil
+	}
+	client, err = New(config)
+	assert.True(t, backendVersionCheck, "expected backend version check")
+	assert.Nil(t, err)
+	assert.NotNil(t, client)
+
 	isKvV2 = oldIsKvV2
+
 }

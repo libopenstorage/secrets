@@ -15,9 +15,12 @@ const (
 	Name                = secrets.TypeVault
 	DefaultBackendPath  = "secret/"
 	VaultBackendPathKey = "VAULT_BACKEND_PATH"
+	VaultBackendKey     = "VAULT_BACKEND"
 	vaultAddressPrefix  = "http"
 	kvVersionKey        = "version"
 	kvDataKey           = "data"
+	kvVersion1          = "kv"
+	kvVersion2          = "kv-v2"
 )
 
 var (
@@ -85,17 +88,24 @@ func New(
 	} else {
 		backendPath = DefaultBackendPath
 	}
-
-	isKvV2, err := isKvV2(client, backendPath)
-	if err != nil {
-		return nil, err
+	var isBackendV2 bool
+	backend := getVaultParam(secretConfig, VaultBackendKey)
+	if backend == kvVersion1 {
+		isBackendV2 = false
+	} else if backend == kvVersion2 {
+		isBackendV2 = true
+	} else {
+		// TODO: Handle backends other than kv
+		isBackendV2, err = isKvV2(client, backendPath)
+		if err != nil {
+			return nil, err
+		}
 	}
-
 	return &vaultSecrets{
 		endpoint:      config.Address,
 		client:        client,
 		backendPath:   backendPath,
-		isKvBackendV2: isKvV2,
+		isKvBackendV2: isBackendV2,
 	}, nil
 }
 
