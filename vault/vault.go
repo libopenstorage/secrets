@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 
@@ -81,11 +82,7 @@ func New(
 	client.SetToken(token)
 
 	backendPath := getVaultParam(secretConfig, VaultBackendPathKey)
-	if backendPath != "" {
-		if !strings.HasSuffix(backendPath, "/") {
-			backendPath = backendPath + "/"
-		}
-	} else {
+	if backendPath == "" {
 		backendPath = DefaultBackendPath
 	}
 	var isBackendV2 bool
@@ -113,18 +110,18 @@ func (v *vaultSecrets) String() string {
 	return Name
 }
 
-func (v *vaultSecrets) getSecretKey(secretID string) string {
+func (v *vaultSecrets) keyPath(secretID, namespace string) string {
 	if v.isKvBackendV2 {
-		return v.backendPath + kvDataKey + "/" + secretID
+		return path.Join(namespace, v.backendPath, kvDataKey, secretID)
 	}
-	return v.backendPath + secretID
+	return path.Join(namespace, v.backendPath, secretID)
 }
 
 func (v *vaultSecrets) GetSecret(
 	secretID string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	secretValue, err := v.client.Logical().Read(v.getSecretKey(secretID))
+	secretValue, err := v.client.Logical().Read(v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace]))
 	if err != nil {
 		return nil, err
 	} else if secretValue == nil {
@@ -154,7 +151,7 @@ func (v *vaultSecrets) PutSecret(
 		}
 	}
 
-	_, err := v.client.Logical().Write(v.getSecretKey(secretID), secretData)
+	_, err := v.client.Logical().Write(v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace]), secretData)
 	return err
 }
 
@@ -162,7 +159,7 @@ func (v *vaultSecrets) DeleteSecret(
 	secretID string,
 	keyContext map[string]string,
 ) error {
-	_, err := v.client.Logical().Delete(v.getSecretKey(secretID))
+	_, err := v.client.Logical().Delete(v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace]))
 	return err
 }
 
