@@ -7,7 +7,7 @@ import (
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/test"
 	"github.com/pborman/uuid"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,7 +25,7 @@ func TestAll(t *testing.T) {
 	// The secret needs to be created before running the tests
 	data := make(map[string][]byte)
 	data[secretId] = []byte("passphrase")
-	_, err = k8s.Instance().UpdateSecretData(secretName, "default", data)
+	_, err = core.Instance().UpdateSecretData(secretName, "default", data)
 	if err != nil {
 		t.Fatalf("Failed to get secret for test: %v", err)
 		return
