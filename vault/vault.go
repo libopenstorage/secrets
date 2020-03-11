@@ -1,14 +1,19 @@
 package vault
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/api"
+	"github.com/hashicorp/vault/command/agent/auth"
+	"github.com/hashicorp/vault/command/agent/auth/kubernetes"
 	"github.com/libopenstorage/secrets"
 )
 
@@ -22,6 +27,15 @@ const (
 	kvDataKey           = "data"
 	kvVersion1          = "kv"
 	kvVersion2          = "kv-v2"
+
+	AuthMethodKubernetes = "kubernetes"
+
+	AuthMethod              = "VAULT_AUTH_METHOD"
+	AuthMountPath           = "VAULT_AUTH_MOUNT_PATH"
+	AuthKubernetesRole      = "VAULT_AUTH_KUBERNETES_ROLE"
+	AuthKubernetesTokenPath = "VAULT_AUTH_KUBERNETES_TOKEN_PATH"
+
+	AuthKubernetesMountPath = "auth/kubernetes"
 )
 
 var (
@@ -31,13 +45,20 @@ var (
 	ErrInvalidSkipVerify   = errors.New("VAULT_SKIP_VERIFY is invalid")
 	ErrInvalidVaultAddress = errors.New("VAULT_ADDRESS is invalid. " +
 		"Should be of the form http(s)://<ip>:<port>")
+
+	ErrAuthMethodUnknown = fmt.Errorf("unknown auth method")
+	ErrKubernetesRole    = fmt.Errorf("%s not set", AuthKubernetesRole)
 )
 
 type vaultSecrets struct {
-	client        *api.Client
+	mu     sync.RWMutex
+	client *api.Client
+
 	endpoint      string
 	backendPath   string
 	isKvBackendV2 bool
+	autoAuth      bool
+	config        map[string]interface{}
 }
 
 // These variables are helpful in testing to stub method call from packages
@@ -54,11 +75,6 @@ func New(
 
 	if len(secretConfig) == 0 && config.Error != nil {
 		return nil, config.Error
-	}
-
-	token := getVaultParam(secretConfig, api.EnvVaultToken)
-	if token == "" {
-		return nil, ErrVaultTokenNotSet
 	}
 
 	address := getVaultParam(secretConfig, api.EnvVaultAddress)
@@ -78,6 +94,22 @@ func New(
 	client, err := newVaultClient(config)
 	if err != nil {
 		return nil, err
+	}
+
+	var autoAuth bool
+	var token string
+	if getVaultParam(secretConfig, AuthMethod) != "" {
+		token, err = getAuthToken(client, secretConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		autoAuth = true
+	} else {
+		token = getVaultParam(secretConfig, api.EnvVaultToken)
+	}
+	if token == "" {
+		return nil, ErrVaultTokenNotSet
 	}
 	client.SetToken(token)
 
@@ -103,6 +135,8 @@ func New(
 		client:        client,
 		backendPath:   backendPath,
 		isKvBackendV2: isBackendV2,
+		autoAuth:      autoAuth,
+		config:        secretConfig,
 	}, nil
 }
 
@@ -121,10 +155,11 @@ func (v *vaultSecrets) GetSecret(
 	secretID string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	secretValue, err := v.client.Logical().Read(v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace]))
+	secretValue, err := v.read(v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace]))
 	if err != nil {
 		return nil, err
-	} else if secretValue == nil {
+	}
+	if secretValue == nil {
 		return nil, secrets.ErrInvalidSecretId
 	}
 
@@ -151,7 +186,7 @@ func (v *vaultSecrets) PutSecret(
 		}
 	}
 
-	_, err := v.client.Logical().Write(v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace]), secretData)
+	_, err := v.write(v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace]), secretData)
 	return err
 }
 
@@ -159,7 +194,7 @@ func (v *vaultSecrets) DeleteSecret(
 	secretID string,
 	keyContext map[string]string,
 ) error {
-	_, err := v.client.Logical().Delete(v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace]))
+	_, err := v.delete(v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace]))
 	return err
 }
 
@@ -193,6 +228,78 @@ func (v *vaultSecrets) ListSecrets() ([]string, error) {
 	return nil, secrets.ErrNotSupported
 }
 
+func (v *vaultSecrets) read(path string) (*api.Secret, error) {
+	secretValue, err := v.lockedRead(path)
+	if v.isTokeExpired(err) {
+		if renewErr := v.renewToken(); renewErr != nil {
+			// return the 'read' error
+			return nil, err
+		}
+		return v.lockedRead(path)
+	}
+	return secretValue, err
+}
+
+func (v *vaultSecrets) write(path string, data map[string]interface{}) (*api.Secret, error) {
+	secretValue, err := v.lockedWrite(path, data)
+	if v.isTokeExpired(err) {
+		if err = v.renewToken(); err != nil {
+			return nil, err
+		}
+		return v.lockedWrite(path, data)
+	}
+	return secretValue, err
+}
+
+func (v *vaultSecrets) delete(path string) (*api.Secret, error) {
+	secretValue, err := v.lockedDelete(path)
+	if v.isTokeExpired(err) {
+		if err = v.renewToken(); err != nil {
+			return nil, err
+		}
+		return v.lockedDelete(path)
+	}
+	return secretValue, err
+}
+
+func (v *vaultSecrets) lockedRead(path string) (*api.Secret, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	return v.client.Logical().Read(path)
+}
+
+func (v *vaultSecrets) lockedWrite(path string, data map[string]interface{}) (*api.Secret, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	return v.client.Logical().Write(path, data)
+}
+
+func (v *vaultSecrets) lockedDelete(path string) (*api.Secret, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	return v.client.Logical().Delete(path)
+}
+
+func (v *vaultSecrets) renewToken() error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	token, err := getAuthToken(v.client, v.config)
+	if err != nil {
+		return fmt.Errorf("renew token: %s", err)
+	}
+
+	v.client.SetToken(token)
+	return nil
+}
+
+func (v *vaultSecrets) isTokeExpired(err error) bool {
+	return err != nil && v.autoAuth && strings.Contains(err.Error(), "permission denied")
+}
+
 func isKvBackendV2(client *api.Client, backendPath string) (bool, error) {
 	mounts, err := client.Sys().ListMounts()
 	if err != nil {
@@ -215,7 +322,11 @@ func isKvBackendV2(client *api.Client, backendPath string) (bool, error) {
 
 func getVaultParam(secretConfig map[string]interface{}, name string) string {
 	if tokenIntf, exists := secretConfig[name]; exists {
-		return tokenIntf.(string)
+		tokenStr, ok := tokenIntf.(string)
+		if !ok {
+			return ""
+		}
+		return tokenStr
 	} else {
 		return os.Getenv(name)
 	}
@@ -248,6 +359,69 @@ func configureTLS(config *api.Config, secretConfig map[string]interface{}) error
 	tlsConfig.TLSServerName = tlsserverName
 
 	return config.ConfigureTLS(&tlsConfig)
+}
+
+func getAuthToken(client *api.Client, config map[string]interface{}) (string, error) {
+	path, data, err := authenticate(client, config)
+	if err != nil {
+		return "", err
+	}
+
+	secret, err := client.Logical().Write(path, data)
+	if err != nil {
+		return "", err
+	}
+	if secret == nil || secret.Auth == nil {
+		return "", errors.New("authentication returned nil auth info")
+	}
+	if secret.Auth.ClientToken == "" {
+		return "", errors.New("authentication returned empty client token")
+	}
+
+	return secret.Auth.ClientToken, err
+}
+
+func authenticate(client *api.Client, config map[string]interface{}) (string, map[string]interface{}, error) {
+	method := getVaultParam(config, AuthMethod)
+	switch method {
+	case AuthMethodKubernetes:
+		return authKubernetes(client, config)
+	}
+	return "", nil, fmt.Errorf("%s method: %s", method, ErrAuthMethodUnknown)
+}
+
+func authKubernetes(client *api.Client, config map[string]interface{}) (string, map[string]interface{}, error) {
+	authConfig, err := buildAuthConfig(config)
+	if err != nil {
+		return "", nil, err
+	}
+	method, err := kubernetes.NewKubernetesAuthMethod(authConfig)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return method.Authenticate(context.TODO(), client)
+}
+
+func buildAuthConfig(config map[string]interface{}) (*auth.AuthConfig, error) {
+	role := getVaultParam(config, AuthKubernetesRole)
+	if role == "" {
+		return nil, ErrKubernetesRole
+	}
+	mountPath := getVaultParam(config, AuthMountPath)
+	if mountPath == "" {
+		mountPath = AuthKubernetesMountPath
+	}
+	tokenPath := getVaultParam(config, AuthKubernetesTokenPath)
+
+	return &auth.AuthConfig{
+		Logger:    hclog.NewNullLogger(),
+		MountPath: mountPath,
+		Config: map[string]interface{}{
+			"role":       role,
+			"token_path": tokenPath,
+		},
+	}, nil
 }
 
 func init() {
