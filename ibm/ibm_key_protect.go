@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
+	ibm "github.com/IBM/keyprotect-go-client"
 	"github.com/libopenstorage/secrets"
-	ibm "github.com/libopenstorage/secrets/pkg/ibm/v2"
 	"github.com/libopenstorage/secrets/pkg/store"
 	"github.com/portworx/kvdb"
 	"github.com/sirupsen/logrus"
