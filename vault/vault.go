@@ -30,12 +30,19 @@ const (
 
 	AuthMethodKubernetes = "kubernetes"
 
-	AuthMethod              = "VAULT_AUTH_METHOD"
-	AuthMountPath           = "VAULT_AUTH_MOUNT_PATH"
-	AuthKubernetesRole      = "VAULT_AUTH_KUBERNETES_ROLE"
+	// AuthMethod is a vault authentication method used.
+	// https://www.vaultproject.io/docs/auth#auth-methods
+	AuthMethod = "VAULT_AUTH_METHOD"
+	// AuthMountPath defines a custom auth mount path.
+	AuthMountPath = "VAULT_AUTH_MOUNT_PATH"
+	// AuthKubernetesRole is the role to authenticate against on Vault
+	AuthKubernetesRole = "VAULT_AUTH_KUBERNETES_ROLE"
+	// AuthKubernetesTokenPath is the file path to a custom JWT token to use for authentication.
+	// If omitted, the default service account token path is used.
 	AuthKubernetesTokenPath = "VAULT_AUTH_KUBERNETES_TOKEN_PATH"
 
-	AuthKubernetesMountPath = "auth/kubernetes"
+	// AuthKubernetesMountPath
+	AuthKubernetesMountPath = "kubernetes"
 )
 
 var (
@@ -414,9 +421,10 @@ func buildAuthConfig(config map[string]interface{}) (*auth.AuthConfig, error) {
 	}
 	tokenPath := getVaultParam(config, AuthKubernetesTokenPath)
 
+	authMountPath := path.Join("auth", mountPath)
 	return &auth.AuthConfig{
 		Logger:    hclog.NewNullLogger(),
-		MountPath: mountPath,
+		MountPath: authMountPath,
 		Config: map[string]interface{}{
 			"role":       role,
 			"token_path": tokenPath,
