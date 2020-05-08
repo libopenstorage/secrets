@@ -314,7 +314,8 @@ func isKvBackendV2(client *api.Client, backendPath string) (bool, error) {
 	}
 
 	for path, mount := range mounts {
-		if path == backendPath {
+		// path is represented as 'path/'
+		if trimSlash(path) == trimSlash(backendPath) {
 			version := mount.Options[kvVersionKey]
 			if version == "2" {
 				return true, nil
@@ -430,6 +431,10 @@ func buildAuthConfig(config map[string]interface{}) (*auth.AuthConfig, error) {
 			"token_path": tokenPath,
 		},
 	}, nil
+}
+
+func trimSlash(in string) string {
+	return strings.Trim(in, "/")
 }
 
 func init() {
