@@ -22,6 +22,7 @@ const (
 	DefaultBackendPath  = "secret/"
 	VaultBackendPathKey = "VAULT_BACKEND_PATH"
 	VaultBackendKey     = "VAULT_BACKEND"
+	VaultNamespaceKey   = "VAULT_NAMESPACE"
 	vaultAddressPrefix  = "http"
 	kvVersionKey        = "version"
 	kvDataKey           = "data"
@@ -63,6 +64,7 @@ type vaultSecrets struct {
 
 	endpoint      string
 	backendPath   string
+	namespace     string
 	isKvBackendV2 bool
 	autoAuth      bool
 	config        map[string]interface{}
@@ -142,6 +144,7 @@ func New(
 		client:        client,
 		backendPath:   backendPath,
 		isKvBackendV2: isBackendV2,
+		namespace:     getVaultParam(secretConfig, VaultNamespaceKey),
 		autoAuth:      autoAuth,
 		config:        secretConfig,
 	}, nil
@@ -152,6 +155,9 @@ func (v *vaultSecrets) String() string {
 }
 
 func (v *vaultSecrets) keyPath(secretID, namespace string) string {
+	if namespace == "" {
+		namespace = v.namespace
+	}
 	if v.isKvBackendV2 {
 		return path.Join(namespace, v.backendPath, kvDataKey, secretID)
 	}
