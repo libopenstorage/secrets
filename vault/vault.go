@@ -125,6 +125,7 @@ func New(
 	if backendPath == "" {
 		backendPath = DefaultBackendPath
 	}
+	namespace := getVaultParam(secretConfig, api.EnvVaultNamespace)
 	var isBackendV2 bool
 	backend := getVaultParam(secretConfig, VaultBackendKey)
 	if backend == kvVersion1 {
@@ -133,14 +134,17 @@ func New(
 		isBackendV2 = true
 	} else {
 		// TODO: Handle backends other than kv
+		client.SetNamespace(namespace)
 		isBackendV2, err = isKvV2(client, backendPath)
 		if err != nil {
 			return nil, err
 		}
+
+		client.SetNamespace("")
 	}
 	return &vaultSecrets{
 		endpoint:      config.Address,
-		namespace:     getVaultParam(secretConfig, api.EnvVaultNamespace),
+		namespace:     namespace,
 		client:        client,
 		backendPath:   backendPath,
 		isKvBackendV2: isBackendV2,
