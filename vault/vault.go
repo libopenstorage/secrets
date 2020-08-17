@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path"
 	"strconv"
@@ -109,6 +110,7 @@ func New(
 	if getVaultParam(secretConfig, AuthMethod) != "" {
 		token, err = getAuthToken(client, secretConfig)
 		if err != nil {
+			closeIdleConnections(config)
 			return nil, err
 		}
 
@@ -117,6 +119,7 @@ func New(
 		token = getVaultParam(secretConfig, api.EnvVaultToken)
 	}
 	if token == "" {
+		closeIdleConnections(config)
 		return nil, ErrVaultTokenNotSet
 	}
 	client.SetToken(token)
@@ -137,6 +140,7 @@ func New(
 		client.SetNamespace(namespace)
 		isBackendV2, err = isKvV2(client, backendPath)
 		if err != nil {
+			closeIdleConnections(config)
 			return nil, err
 		}
 
@@ -477,4 +481,14 @@ func (k keyPath) Path() string {
 
 func (k keyPath) String() string {
 	return fmt.Sprintf("backendPath=%s, backendV2=%t, namespace=%s, secretID=%s", k.backendPath, k.isBackendV2, k.namespace, k.secretID)
+}
+
+func closeIdleConnections(cfg *api.Config) {
+	if cfg == nil || cfg.HttpClient == nil {
+		return
+	}
+	// close connection in case of error (a fix for go version < 1.12)
+	if tp, ok := cfg.HttpClient.Transport.(*http.Transport); ok {
+		tp.CloseIdleConnections()
+	}
 }
