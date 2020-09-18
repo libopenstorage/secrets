@@ -105,12 +105,6 @@ func New(
 		return nil, err
 	}
 
-	namespace := getVaultParam(secretConfig, api.EnvVaultNamespace)
-	// use a namespace as a header for setup purposes
-	// later use it as a key prefix
-	client.SetNamespace(namespace)
-	defer client.SetNamespace("")
-
 	var autoAuth bool
 	var token string
 	if getVaultParam(secretConfig, AuthMethod) != "" {
@@ -134,7 +128,7 @@ func New(
 	if backendPath == "" {
 		backendPath = DefaultBackendPath
 	}
-
+	namespace := getVaultParam(secretConfig, api.EnvVaultNamespace)
 	var isBackendV2 bool
 	backend := getVaultParam(secretConfig, VaultBackendKey)
 	if backend == kvVersion1 {
@@ -143,11 +137,14 @@ func New(
 		isBackendV2 = true
 	} else {
 		// TODO: Handle backends other than kv
+		client.SetNamespace(namespace)
 		isBackendV2, err = isKvV2(client, backendPath)
 		if err != nil {
 			closeIdleConnections(config)
 			return nil, err
 		}
+
+		client.SetNamespace("")
 	}
 	return &vaultSecrets{
 		endpoint:      config.Address,
