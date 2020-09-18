@@ -106,10 +106,12 @@ func New(
 	}
 
 	namespace := getVaultParam(secretConfig, api.EnvVaultNamespace)
-	// use a namespace as a header for setup purposes
-	// later use it as a key prefix
-	client.SetNamespace(namespace)
-	defer client.SetNamespace("")
+	if len(namespace) > 0 {
+		// use a namespace as a header for setup purposes
+		// later use it as a key prefix
+		client.SetNamespace(namespace)
+		defer client.SetNamespace("")
+	}
 
 	var autoAuth bool
 	var token string
@@ -319,6 +321,10 @@ func (v *vaultSecrets) renewToken() error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
+	if len(v.namespace) > 0 {
+		v.client.SetNamespace(v.namespace)
+		defer v.client.SetNamespace("")
+	}
 	token, err := getAuthToken(v.client, v.config)
 	if err != nil {
 		return fmt.Errorf("renew token: %s", err)
