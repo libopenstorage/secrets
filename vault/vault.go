@@ -62,6 +62,9 @@ type vaultSecrets struct {
 	mu     sync.RWMutex
 	client *api.Client
 
+	currentNamespace string
+	lockClientToken  sync.Mutex
+
 	endpoint      string
 	backendPath   string
 	namespace     string
@@ -152,13 +155,14 @@ func New(
 		}
 	}
 	return &vaultSecrets{
-		endpoint:      config.Address,
-		namespace:     namespace,
-		client:        client,
-		backendPath:   backendPath,
-		isKvBackendV2: isBackendV2,
-		autoAuth:      autoAuth,
-		config:        secretConfig,
+		endpoint:         config.Address,
+		namespace:        namespace,
+		currentNamespace: namespace,
+		client:           client,
+		backendPath:      backendPath,
+		isKvBackendV2:    isBackendV2,
+		autoAuth:         autoAuth,
+		config:           secretConfig,
 	}, nil
 }
 
@@ -183,7 +187,7 @@ func (v *vaultSecrets) GetSecret(
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
 	key := v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace])
-	secretValue, err := v.read(key.Path())
+	secretValue, err := v.read(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret: %s: %s", key, err)
 	}
@@ -215,7 +219,7 @@ func (v *vaultSecrets) PutSecret(
 	}
 
 	key := v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace])
-	if _, err := v.write(key.Path(), secretData); err != nil {
+	if _, err := v.write(key, secretData); err != nil {
 		return fmt.Errorf("failed to put secret: %s: %s", key, err)
 	}
 	return nil
@@ -226,7 +230,7 @@ func (v *vaultSecrets) DeleteSecret(
 	keyContext map[string]string,
 ) error {
 	key := v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace])
-	if _, err := v.delete(key.Path()); err != nil {
+	if _, err := v.delete(key); err != nil {
 		return fmt.Errorf("failed to delete secret: %s: %s", key, err)
 	}
 	return nil
@@ -262,36 +266,62 @@ func (v *vaultSecrets) ListSecrets() ([]string, error) {
 	return nil, secrets.ErrNotSupported
 }
 
-func (v *vaultSecrets) read(path string) (*api.Secret, error) {
-	secretValue, err := v.lockedRead(path)
-	if v.isTokeExpired(err) {
-		if renewErr := v.renewToken(); renewErr != nil {
-			// return the 'read' error
+func (v *vaultSecrets) read(path keyPath) (*api.Secret, error) {
+	if v.autoAuth {
+		v.lockClientToken.Lock()
+		defer v.lockClientToken.Unlock()
+
+		if err := v.setNamespaceToken(path.Namespace()); err != nil {
 			return nil, err
 		}
-		return v.lockedRead(path)
+	}
+
+	secretValue, err := v.lockedRead(path.Path())
+	if v.isTokenExpired(err) {
+		if err = v.renewToken(path.Namespace()); err != nil {
+			return nil, fmt.Errorf("failed to renew token: %s", err)
+		}
+		return v.lockedRead(path.Path())
 	}
 	return secretValue, err
 }
 
-func (v *vaultSecrets) write(path string, data map[string]interface{}) (*api.Secret, error) {
-	secretValue, err := v.lockedWrite(path, data)
-	if v.isTokeExpired(err) {
-		if err = v.renewToken(); err != nil {
+func (v *vaultSecrets) write(path keyPath, data map[string]interface{}) (*api.Secret, error) {
+	if v.autoAuth {
+		v.lockClientToken.Lock()
+		defer v.lockClientToken.Unlock()
+
+		if err := v.setNamespaceToken(path.Namespace()); err != nil {
 			return nil, err
 		}
-		return v.lockedWrite(path, data)
+	}
+
+	secretValue, err := v.lockedWrite(path.Path(), data)
+	if v.isTokenExpired(err) {
+		if err = v.renewToken(path.Namespace()); err != nil {
+			return nil, fmt.Errorf("failed to renew token: %s", err)
+		}
+		return v.lockedWrite(path.Path(), data)
 	}
 	return secretValue, err
 }
 
-func (v *vaultSecrets) delete(path string) (*api.Secret, error) {
-	secretValue, err := v.lockedDelete(path)
-	if v.isTokeExpired(err) {
-		if err = v.renewToken(); err != nil {
+func (v *vaultSecrets) delete(path keyPath) (*api.Secret, error) {
+	if v.autoAuth {
+		v.lockClientToken.Lock()
+		defer v.lockClientToken.Unlock()
+
+		if err := v.setNamespaceToken(path.Namespace()); err != nil {
 			return nil, err
 		}
-		return v.lockedDelete(path)
+	}
+
+	secretValue, err := v.lockedDelete(path.Path())
+	if v.isTokenExpired(err) {
+		if err = v.renewToken(path.Namespace()); err != nil {
+			return nil, fmt.Errorf("failed to renew token: %s", err)
+		}
+		return v.lockedDelete(path.Path())
 	}
 	return secretValue, err
 }
@@ -317,25 +347,38 @@ func (v *vaultSecrets) lockedDelete(path string) (*api.Secret, error) {
 	return v.client.Logical().Delete(path)
 }
 
-func (v *vaultSecrets) renewToken() error {
+func (v *vaultSecrets) renewToken(namespace string) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	if len(v.namespace) > 0 {
-		v.client.SetNamespace(v.namespace)
+	if len(namespace) > 0 {
+		v.client.SetNamespace(namespace)
 		defer v.client.SetNamespace("")
 	}
 	token, err := getAuthToken(v.client, v.config)
 	if err != nil {
-		return fmt.Errorf("renew token: %s", err)
+		return fmt.Errorf("get auth token for %s namespace: %s", namespace, err)
 	}
 
 	v.client.SetToken(token)
 	return nil
 }
 
-func (v *vaultSecrets) isTokeExpired(err error) bool {
+func (v *vaultSecrets) isTokenExpired(err error) bool {
 	return err != nil && v.autoAuth && strings.Contains(err.Error(), "permission denied")
+}
+
+// setNamespaceToken  is used for a multi-token support with a kubernetes auto auth setup.
+//
+// This allows to talk with a multiple vault namespaces (which are not sub-namespace). Create
+// the same “Kubernetes Auth Role” in each of the configured namespace. For every request it
+// fetches the token for that specific namespace.
+func (v *vaultSecrets) setNamespaceToken(namespace string) error {
+	if v.currentNamespace == namespace {
+		return nil
+	}
+
+	return v.renewToken(namespace)
 }
 
 func isKvBackendV2(client *api.Client, backendPath string) (bool, error) {
@@ -486,6 +529,10 @@ func (k keyPath) Path() string {
 		return path.Join(k.namespace, k.backendPath, kvDataKey, k.secretID)
 	}
 	return path.Join(k.namespace, k.backendPath, k.secretID)
+}
+
+func (k keyPath) Namespace() string {
+	return k.namespace
 }
 
 func (k keyPath) String() string {
