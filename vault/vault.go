@@ -360,6 +360,7 @@ func (v *vaultSecrets) renewToken(namespace string) error {
 		return fmt.Errorf("get auth token for %s namespace: %s", namespace, err)
 	}
 
+	v.currentNamespace = namespace
 	v.client.SetToken(token)
 	return nil
 }
