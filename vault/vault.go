@@ -445,7 +445,7 @@ func configureTLS(config *api.Config, secretConfig map[string]interface{}) error
 }
 
 func getAuthToken(client *api.Client, config map[string]interface{}) (string, error) {
-	path, data, err := authenticate(client, config)
+	path, _, data, err := authenticate(client, config)
 	if err != nil {
 		return "", err
 	}
@@ -464,23 +464,23 @@ func getAuthToken(client *api.Client, config map[string]interface{}) (string, er
 	return secret.Auth.ClientToken, err
 }
 
-func authenticate(client *api.Client, config map[string]interface{}) (string, map[string]interface{}, error) {
+func authenticate(client *api.Client, config map[string]interface{}) (string, http.Header, map[string]interface{}, error) {
 	method := getVaultParam(config, AuthMethod)
 	switch method {
 	case AuthMethodKubernetes:
 		return authKubernetes(client, config)
 	}
-	return "", nil, fmt.Errorf("%s method: %s", method, ErrAuthMethodUnknown)
+	return "", nil, nil, fmt.Errorf("%s method: %s", method, ErrAuthMethodUnknown)
 }
 
-func authKubernetes(client *api.Client, config map[string]interface{}) (string, map[string]interface{}, error) {
+func authKubernetes(client *api.Client, config map[string]interface{}) (string, http.Header, map[string]interface{}, error) {
 	authConfig, err := buildAuthConfig(config)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	method, err := kubernetes.NewKubernetesAuthMethod(authConfig)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 
 	return method.Authenticate(context.TODO(), client)
