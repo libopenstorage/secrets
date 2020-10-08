@@ -33,12 +33,6 @@ func TestNew(t *testing.T) {
 	assert.NotNil(t, err)
 	os.Unsetenv(api.EnvVaultInsecure)
 
-	// vault address and token not provided
-	_, err = New(nil)
-
-	assert.NotNil(t, err)
-	assert.Equal(t, ErrVaultTokenNotSet, err)
-
 	// vault address not provided
 	os.Setenv(api.EnvVaultToken, "token")
 
@@ -196,7 +190,6 @@ func TestNew(t *testing.T) {
 	assert.NotNil(t, client)
 
 	isKvV2 = oldIsKvV2
-
 }
 
 func TestKeyPath(t *testing.T) {
@@ -226,6 +219,6 @@ func TestKeyPath(t *testing.T) {
 		}
 
 		spath := v.keyPath(tc.id, tc.namespace)
-		require.Equalf(t, tc.expected, spath, "TC#%d", i)
+		require.Equalf(t, tc.expected, spath.Path(), "TC#%d", i)
 	}
 }
