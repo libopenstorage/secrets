@@ -21,6 +21,8 @@ var (
 	ErrSecretExists = errors.New("Secret Id already exists")
 	// ErrInvalidSecretData is returned when no secret data is found
 	ErrInvalidSecretData = errors.New("Secret Data cannot be empty when CustomSecretData|PublicSecretData flag is set")
+	// ErrInvalidKvdbProvided is returned when an incorrect KVDB implementation is provided for persistence store.
+	ErrInvalidKvdbProvided = errors.New("Invalid kvdb provided. secret store works in conjuction with a kvdb")
 )
 
 const (
@@ -40,15 +42,16 @@ const (
 )
 
 const (
-	TypeAWS    = "aws-kms"
-	TypeAzure  = "azure-kv"
-	TypeDCOS   = "dcos"
-	TypeDocker = "docker"
-	TypeGCloud = "gcloud-kms"
-	TypeIBM    = "ibm-kp"
-	TypeK8s    = "k8s"
-	TypeKVDB   = "kvdb"
-	TypeVault  = "vault"
+	TypeAWS          = "aws-kms"
+	TypeAzure        = "azure-kv"
+	TypeDCOS         = "dcos"
+	TypeDocker       = "docker"
+	TypeGCloud       = "gcloud-kms"
+	TypeIBM          = "ibm-kp"
+	TypeK8s          = "k8s"
+	TypeKVDB         = "kvdb"
+	TypeVault        = "vault"
+	TypeVaultTransit = "vault-transit"
 )
 
 const (

@@ -2,6 +2,7 @@ package vault
 
 import (
 	"fmt"
+	"github.com/libopenstorage/secrets/vault/utils"
 	"os"
 	"testing"
 
@@ -39,7 +40,7 @@ func TestNew(t *testing.T) {
 	_, err = New(nil)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, ErrVaultAddressNotSet, err)
+	assert.Equal(t, utils.ErrVaultAddressNotSet, err)
 	os.Unsetenv(api.EnvVaultToken)
 
 	// vault address not provided
@@ -49,7 +50,7 @@ func TestNew(t *testing.T) {
 	_, err = New(config)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, ErrVaultAddressNotSet, err)
+	assert.Equal(t, utils.ErrVaultAddressNotSet, err)
 
 	// vault token not provided
 	os.Setenv(api.EnvVaultAddress, "http://127.0.0.1:8200")
@@ -57,7 +58,7 @@ func TestNew(t *testing.T) {
 	_, err = New(nil)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, ErrVaultTokenNotSet, err)
+	assert.Equal(t, utils.ErrVaultTokenNotSet, err)
 	os.Unsetenv(api.EnvVaultAddress)
 
 	// vault token not provided
@@ -67,7 +68,7 @@ func TestNew(t *testing.T) {
 	_, err = New(config)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, ErrVaultTokenNotSet, err)
+	assert.Equal(t, utils.ErrVaultTokenNotSet, err)
 
 	// vault address is not valid
 	os.Setenv(api.EnvVaultToken, "token")
@@ -76,7 +77,7 @@ func TestNew(t *testing.T) {
 	_, err = New(nil)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, ErrInvalidVaultAddress, err)
+	assert.Equal(t, utils.ErrInvalidVaultAddress, err)
 	os.Unsetenv(api.EnvVaultToken)
 	os.Unsetenv(api.EnvVaultAddress)
 
@@ -89,7 +90,7 @@ func TestNew(t *testing.T) {
 	_, err = New(config)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, ErrInvalidSkipVerify, err)
+	assert.Equal(t, utils.ErrInvalidSkipVerify, err)
 
 	// error from TLS config
 	config = make(map[string]interface{})
