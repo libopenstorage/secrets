@@ -1,12 +1,13 @@
 package vault
 
 import (
+	"errors"
 	"fmt"
-	"github.com/libopenstorage/secrets/vault/utils"
 	"os"
 	"testing"
 
 	"github.com/hashicorp/vault/api"
+	"github.com/libopenstorage/secrets/vault/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -58,7 +59,7 @@ func TestNew(t *testing.T) {
 	_, err = New(nil)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, utils.ErrVaultTokenNotSet, err)
+	assert.Equal(t, utils.ErrVaultAuthParamsNotSet, errors.Unwrap(err))
 	os.Unsetenv(api.EnvVaultAddress)
 
 	// vault token not provided
@@ -68,7 +69,7 @@ func TestNew(t *testing.T) {
 	_, err = New(config)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, utils.ErrVaultTokenNotSet, err)
+	assert.Equal(t, utils.ErrVaultAuthParamsNotSet, errors.Unwrap(err))
 
 	// vault address is not valid
 	os.Setenv(api.EnvVaultToken, "token")

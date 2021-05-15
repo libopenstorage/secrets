@@ -36,11 +36,11 @@ const (
 )
 
 var (
-	ErrVaultTokenNotSet    = errors.New("VAULT_TOKEN not set.")
-	ErrVaultAddressNotSet  = errors.New("VAULT_ADDR not set.")
-	ErrInvalidVaultToken   = errors.New("VAULT_TOKEN is invalid")
-	ErrInvalidSkipVerify   = errors.New("VAULT_SKIP_VERIFY is invalid")
-	ErrInvalidVaultAddress = errors.New("VAULT_ADDRESS is invalid. " +
+	ErrVaultAuthParamsNotSet = errors.New("VAULT_TOKEN or VAULT_AUTH_METHOD not set")
+	ErrVaultAddressNotSet    = errors.New("VAULT_ADDR not set")
+	ErrInvalidVaultToken     = errors.New("VAULT_TOKEN is invalid")
+	ErrInvalidSkipVerify     = errors.New("VAULT_SKIP_VERIFY is invalid")
+	ErrInvalidVaultAddress   = errors.New("VAULT_ADDRESS is invalid. " +
 		"Should be of the form http(s)://<ip>:<port>")
 
 	ErrAuthMethodUnknown = errors.New("unknown auth method")
@@ -112,12 +112,18 @@ func CloseIdleConnections(cfg *api.Config) {
 
 // Authenticate gets vault authentication parameters for the provided configuration.
 func Authenticate(client *api.Client, config map[string]interface{}) (token string, autoAuth bool, err error) {
-	if GetVaultParam(config, AuthMethod) == "" {
-		return GetVaultParam(config, api.EnvVaultToken), false, nil
+	// use VAULT_TOKEN if it's provided
+	if token = GetVaultParam(config, api.EnvVaultToken); token != "" {
+		return token, false, nil
 	}
-	
-	token, err = GetAuthToken(client, config)
-	return token, true, err
+
+	// or try to use the kubernetes auth method
+	if GetVaultParam(config, AuthMethod) != "" {
+		token, err = GetAuthToken(client, config)
+		return token, true, err
+	}
+
+	return "", false, ErrVaultAuthParamsNotSet
 } 
 
 // GetAuthToken tries to get the vault token for the provided authentication method.
