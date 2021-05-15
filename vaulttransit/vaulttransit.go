@@ -110,7 +110,8 @@ func New(
 	client.SetToken(token)
 
 	userEncryptionKey := utils.GetVaultParam(secretConfig, EncryptionKey)
-	encryptionKey, err := ensureEncryptionKey(client, userEncryptionKey, namespace)
+	// vault namespace has been already set to the client
+	encryptionKey, err := ensureEncryptionKey(client, userEncryptionKey, "")
 	if err != nil {
 		return nil, err
 	}
