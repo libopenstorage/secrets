@@ -103,9 +103,9 @@ func New(
 	}
 
 	token, autoAuth, err := utils.Authenticate(client, secretConfig)
-	if token == "" {
+	if err != nil {
 		utils.CloseIdleConnections(config)
-		return nil, utils.ErrVaultTokenNotSet
+		return nil, fmt.Errorf("failed to get the authentication token: %w", err)
 	}
 	client.SetToken(token)
 
