@@ -18,6 +18,7 @@ const (
 	VaultBackendKey     = "VAULT_BACKEND"
 	kvVersionKey        = "version"
 	kvDataKey           = "data"
+	kvMetadataKey       = "metadata"
 	kvVersion1          = "kv"
 	kvVersion2          = "kv-v2"
 
@@ -134,15 +135,29 @@ func (v *vaultSecrets) String() string {
 	return Name
 }
 
-func (v *vaultSecrets) keyPath(secretID, namespace string) keyPath {
-	if namespace == "" {
+func (v *vaultSecrets) keyPath(secretID string, keyContext map[string]string) keyPath {
+	backendPath := v.backendPath
+	var namespace string
+	var ok bool
+	if namespace, ok = keyContext[secrets.KeyVaultNamespace]; !ok {
 		namespace = v.namespace
 	}
+
+	var isDestroyKey bool
+	if v.isKvBackendV2 {
+		if destroyAllSecrets, ok := keyContext[secrets.DestroySecret]; ok {
+			// checking for any value seems sufficient to assume 'destroy' is requested
+			if destroyAllSecrets != "" {
+				isDestroyKey = true
+			}
+		}
+	}
 	return keyPath{
-		backendPath: v.backendPath,
-		isBackendV2: v.isKvBackendV2,
-		namespace:   namespace,
-		secretID:    secretID,
+		backendPath:  backendPath,
+		isBackendV2:  v.isKvBackendV2,
+		namespace:    namespace,
+		secretID:     secretID,
+		isDestroyKey: isDestroyKey,
 	}
 }
 
@@ -150,7 +165,7 @@ func (v *vaultSecrets) GetSecret(
 	secretID string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	key := v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace])
+	key := v.keyPath(secretID, keyContext)
 	secretValue, err := v.read(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret: %s: %s", key, err)
@@ -182,7 +197,7 @@ func (v *vaultSecrets) PutSecret(
 		}
 	}
 
-	key := v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace])
+	key := v.keyPath(secretID, keyContext)
 	if _, err := v.write(key, secretData); err != nil {
 		return fmt.Errorf("failed to put secret: %s: %s", key, err)
 	}
@@ -193,7 +208,7 @@ func (v *vaultSecrets) DeleteSecret(
 	secretID string,
 	keyContext map[string]string,
 ) error {
-	key := v.keyPath(secretID, keyContext[secrets.KeyVaultNamespace])
+	key := v.keyPath(secretID, keyContext)
 	if _, err := v.delete(key); err != nil {
 		return fmt.Errorf("failed to delete secret: %s: %s", key, err)
 	}
@@ -372,15 +387,20 @@ func trimSlash(in string) string {
 }
 
 type keyPath struct {
-	backendPath string
-	isBackendV2 bool
-	namespace   string
-	secretID    string
+	backendPath  string
+	isBackendV2  bool
+	namespace    string
+	secretID     string
+	isDestroyKey bool
 }
 
 func (k keyPath) Path() string {
 	if k.isBackendV2 {
-		return path.Join(k.namespace, k.backendPath, kvDataKey, k.secretID)
+		keyType := kvDataKey
+		if k.isDestroyKey {
+			keyType = kvMetadataKey
+		}
+		return path.Join(k.namespace, k.backendPath, keyType, k.secretID)
 	}
 	return path.Join(k.namespace, k.backendPath, k.secretID)
 }

@@ -57,6 +57,11 @@ const (
 const (
 	// KeyVaultNamespace is a keyContext parameter for vault secrets.
 	KeyVaultNamespace = "vault-namespace"
+
+	// DestroySecret is a keyContext parameter for Vault secrets indicating whether the Secret should be destroyed
+	// This is only valid when Vault's KV Secret Engine is running on version 2 since by default keys are versioned and soft-deleted
+	// Activating this will PERMANENTLY delete all metadata and versions for a key
+	DestroySecret = "destroy-all-secret-versions"
 )
 
 // Secrets interface implemented by backend Key Management Systems (KMS)
