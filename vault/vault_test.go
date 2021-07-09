@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/vault/api"
+	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/vault/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -220,7 +221,7 @@ func TestKeyPath(t *testing.T) {
 			isKvBackendV2: tc.isKV2,
 		}
 
-		spath := v.keyPath(tc.id, tc.namespace)
+		spath := v.keyPath(tc.id, map[string]string{secrets.KeyVaultNamespace: tc.namespace})
 		require.Equalf(t, tc.expected, spath.Path(), "TC#%d", i)
 	}
 }
