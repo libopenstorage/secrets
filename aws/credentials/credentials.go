@@ -31,10 +31,10 @@ func NewAWSCredentials(id, secret, token string) (AWSCredentials, error) {
 			&credentials.EnvProvider{},
 		}
 		// Check if we are running on EC2 instance
-		client := http.Client{Timeout: time.Second * 10}
-		url := "http://169.254.169.254/latest/meta-data/"
-		res, err := client.Get(url)
+		c := ec2metadata.New(session.New())
+		_, err := c.GetMetadata("mac")
 		if err == nil {
+			client := http.Client{Timeout: time.Second * 10}
 			sess := session.Must(session.NewSession())
 			ec2RoleProvider := &ec2rolecreds.EC2RoleProvider{
 				Client: ec2metadata.New(sess, &aws.Config{
@@ -42,7 +42,6 @@ func NewAWSCredentials(id, secret, token string) (AWSCredentials, error) {
 				}),
 			}
 			providers = append(providers, ec2RoleProvider)
-			res.Body.Close()
 		}
 		providers = append(providers, &credentials.SharedCredentialsProvider{})
 		creds = credentials.NewChainCredentials(providers)
