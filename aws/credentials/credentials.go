@@ -19,7 +19,7 @@ type awsCred struct {
 	creds *credentials.Credentials
 }
 
-func NewAWSCredentials(id, secret, token string) (AWSCredentials, error) {
+func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredentials, error) {
 	var creds *credentials.Credentials
 	if id != "" && secret != "" {
 		creds = credentials.NewStaticCredentials(id, secret, token)
@@ -30,10 +30,7 @@ func NewAWSCredentials(id, secret, token string) (AWSCredentials, error) {
 		providers := []credentials.Provider{
 			&credentials.EnvProvider{},
 		}
-		// Check if we are running on EC2 instance
-		c := ec2metadata.New(session.New())
-		_, err := c.GetMetadata("mac")
-		if err == nil {
+		if runningOnEc2 {
 			client := http.Client{Timeout: time.Second * 10}
 			sess := session.Must(session.NewSession())
 			ec2RoleProvider := &ec2rolecreds.EC2RoleProvider{
