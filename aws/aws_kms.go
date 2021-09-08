@@ -93,7 +93,7 @@ func New(
 	if err != nil {
 		return nil, err
 	}
-	asc, err := sc.NewAWSCredentials(id, secret, token)
+	asc, err := sc.NewAWSCredentials(id, secret, token, true)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get credentials: %v", err)
 	}
