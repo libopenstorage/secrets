@@ -7,7 +7,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.9.2
 	github.com/Azure/go-autorest/autorest/adal v0.7.0
 	github.com/Azure/go-autorest/autorest/to v0.3.0
-	github.com/IBM/keyprotect-go-client v0.5.1
+	github.com/IBM/keyprotect-go-client v0.7.0
 	github.com/aws/aws-sdk-go v1.25.41
 	github.com/golang/mock v1.4.3
 	github.com/hashicorp/go-hclog v0.14.1
@@ -18,7 +18,7 @@ require (
 	github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467
 	github.com/portworx/sched-ops v0.0.0-20200831185134-3e8010dc7056
 	github.com/sirupsen/logrus v1.4.2
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.7.0
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	google.golang.org/api v0.14.0
 	google.golang.org/protobuf v1.25.0 // indirect
