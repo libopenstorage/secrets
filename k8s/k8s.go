@@ -3,6 +3,8 @@ package k8s
 import (
 	"fmt"
 
+	"strings"
+
 	"github.com/libopenstorage/secrets"
 	"github.com/portworx/sched-ops/k8s/core"
 )
@@ -35,11 +37,11 @@ func (s *k8sSecrets) GetSecret(
 
 	secret, err := core.Instance().GetSecret(secretName, namespace)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil, secrets.ErrInvalidSecretId
+		}
 		return nil, fmt.Errorf("Failed to get secret [%s]. Err: %v",
 			secretName, err)
-	}
-	if secret == nil {
-		return nil, secrets.ErrInvalidSecretId
 	}
 
 	data := make(map[string]interface{})
