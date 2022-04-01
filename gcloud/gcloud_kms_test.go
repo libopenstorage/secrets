@@ -23,3 +23,15 @@ func TestNew(t *testing.T) {
 	_, err = New(secretConfig)
 	assert.EqualError(t, err, ErrInvalidKvdbProvided.Error(), "Unepxected error when Kvdb Key not provided")
 }
+
+func TestSplit(t *testing.T) {
+	input := []byte{1, 2, 3, 4, 5}
+	expected := [][]byte{{1, 2}, {3, 4}, {5}}
+
+	output := splitChunk(input, 2)
+	assert.Equal(t, output, expected)
+
+	output = splitChunk(input, 0)
+	expected = [][]byte{{1, 2, 3, 4, 5}}
+	assert.Equal(t, output, expected)
+}
