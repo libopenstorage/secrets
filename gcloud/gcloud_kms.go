@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"hash"
 	"os"
 
 	"github.com/libopenstorage/secrets"
@@ -111,18 +112,10 @@ func (g *gcloudKmsSecrets) GetSecret(
 		return secretData, nil
 	}
 
-	ctx := context.Background()
-	decryptRequest := &cloudkms.AsymmetricDecryptRequest{
-		Ciphertext: base64.StdEncoding.EncodeToString(dek),
-	}
-	response, err := g.kms.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
-		AsymmetricDecrypt(g.publicKeyPath, decryptRequest).Context(ctx).Do()
+	// decrypt the dek (chunks of encrypted byte) due to the asymmetric key encryption limits
+	plaintext, err := decryptToPlaintext(g, dek)
 	if err != nil {
-		return nil, fmt.Errorf("decryption request failed: %v", err.Error())
-	}
-	plaintext, err := base64.StdEncoding.DecodeString(response.Plaintext)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode decryted string: %v", err)
+		return nil, err
 	}
 
 	if customData {
@@ -174,9 +167,11 @@ func (g *gcloudKmsSecrets) PutSecret(
 		}
 		// encrypt the plain text
 		rsaKey := publicKey.(*rsa.PublicKey)
-		dek, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, rsaKey, plainTextByte, nil)
-		if err != nil {
-			return fmt.Errorf("encryption for secret failed: %v", err)
+		hash := sha256.New()
+
+		// encrypt the plaintext by chunks to bypass the asymmetric key encryption limits
+		if dek, err = encryptPlaintextByChunks(plainTextByte, rsaKey, hash); err != nil {
+			return err
 		}
 
 	} else {
@@ -190,6 +185,77 @@ func (g *gcloudKmsSecrets) PutSecret(
 		nil,
 		override,
 	)
+}
+
+func getRSALimit(pk *rsa.PublicKey, hash *hash.Hash) int {
+	return pk.Size() - 2*(*hash).Size() - 2
+}
+
+// decrypt takes in the dek, which is a map of encrypted bytes, in byte array form.
+// It first unmarshal the data into the map. Then iterate through each item sequentially to decrypt.
+// Finally combined them into the decrypted plaintext form.
+func decryptToPlaintext(g *gcloudKmsSecrets, dek []byte) ([]byte, error) {
+	var plaintext []byte
+	var dekMap map[int][]byte
+
+	if err := json.Unmarshal(dek, &dekMap); err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < len(dekMap); i++ {
+		chunk := dekMap[i]
+		ctx := context.Background()
+		decryptRequest := &cloudkms.AsymmetricDecryptRequest{
+			Ciphertext: base64.StdEncoding.EncodeToString(chunk),
+		}
+		response, err := g.kms.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
+			AsymmetricDecrypt(g.publicKeyPath, decryptRequest).Context(ctx).Do()
+		if err != nil {
+			return nil, fmt.Errorf("decryption request failed: %v", err.Error())
+		}
+		chunkPlaintext, err := base64.StdEncoding.DecodeString(response.Plaintext)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode decryted string: %v", err)
+		}
+
+		plaintext = append(plaintext, chunkPlaintext...)
+	}
+
+	return plaintext, nil
+}
+
+// encryptPlaintextByChunks divids the plainTextBytes into chunks that are within the limit. Then
+// encrypts each chunk one by one and store them in map. Finally return the serialized map.
+func encryptPlaintextByChunks(plainTextByte []byte, rsaKey *rsa.PublicKey, hash hash.Hash) ([]byte, error) {
+	limit := getRSALimit(rsaKey, &hash)
+	dekChunks := splitChunk(plainTextByte, limit)
+	dekMap := make(map[int][]byte)
+	for i, chunk := range dekChunks {
+		var chunkedDek []byte
+		chunkedDek, err := rsa.EncryptOAEP(hash, rand.Reader, rsaKey, chunk, nil)
+		if err != nil {
+			return nil, fmt.Errorf("encryption for secret failed: %v", err)
+		}
+		dekMap[i] = chunkedDek
+	}
+
+	return json.Marshal(dekMap)
+}
+
+// splitChunk splits the plaintextByte into an array of byte array
+// each byte array has maximum size defined by the limit
+func splitChunk(plainTextByte []byte, limit int) [][]byte {
+	chunks := make([][]byte, 0, len(plainTextByte)/limit+1)
+	var chunk []byte
+	for len(plainTextByte) >= limit {
+		chunk, plainTextByte = plainTextByte[:limit], plainTextByte[limit:]
+		chunks = append(chunks, chunk)
+	}
+	if len(plainTextByte) > 0 {
+		chunks = append(chunks, plainTextByte)
+	}
+
+	return chunks
 }
 
 func (g *gcloudKmsSecrets) DeleteSecret(
