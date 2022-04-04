@@ -3,6 +3,7 @@
 package gcloud
 
 import (
+	"math/rand"
 	"os"
 	"testing"
 
@@ -15,9 +16,10 @@ import (
 )
 
 const (
-	testSecretIdWithPassphrase = "openstorage_secret_with_passphrase"
-	testSecretId               = "openstorage_secret"
-	testSecretIdWithPublic     = "openstorage_secret_with_public"
+	testSecretIdWithPassphrase      = "openstorage_secret_with_passphrase"
+	testSecretIdWithLargePassphrase = "openstorage_secret_with_large_passpharse"
+	testSecretId                    = "openstorage_secret"
+	testSecretIdWithPublic          = "openstorage_secret_with_public"
 )
 
 func TestAll(t *testing.T) {
@@ -41,9 +43,10 @@ func TestAll(t *testing.T) {
 }
 
 type gcloudSecretTest struct {
-	s          secrets.Secrets
-	passphrase string
-	totalPuts  int
+	s               secrets.Secrets
+	passphrase      string
+	largePassphrase string
+	totalPuts       int
 }
 
 func NewGcloudSecretTest(secretConfig map[string]interface{}) (test.SecretTest, error) {
@@ -76,6 +79,13 @@ func (i *gcloudSecretTest) TestPutSecret(t *testing.T) error {
 	assert.Contains(t, errInvalidContext.Error(), "secret data needs to be provided", "Unexpected error on PutSecret")
 
 	// Successful PutSecret with custom secret data
+	err = i.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
+	assert.NoError(t, err, "Unexpected error on PutSecret")
+	i.totalPuts++
+
+	// Put Secret with large secret data text
+	i.largePassphrase = randSeq(2000)
+	secretData[testSecretIdWithLargePassphrase] = i.largePassphrase
 	err = i.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 	i.totalPuts++
@@ -198,4 +208,14 @@ func TestNewWithKVDB(t *testing.T) {
 	kp, err = New(secretConfig)
 	assert.NotNil(t, kp, "Expected New API to succeed")
 	assert.NoError(t, err, "Unepxected error on New")
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }

@@ -243,8 +243,13 @@ func encryptPlaintextByChunks(plainTextByte []byte, rsaKey *rsa.PublicKey, hash 
 }
 
 // splitChunk splits the plaintextByte into an array of byte array
-// each byte array has maximum size defined by the limit
+// each byte array has maximum size of `limit`
 func splitChunk(plainTextByte []byte, limit int) [][]byte {
+	if limit <= 0 {
+		// this should never happen. but we shouldn't break the flow,
+		// return the original input for EncryptOAEP to return the error
+		return [][]byte{plainTextByte}
+	}
 	chunks := make([][]byte, 0, len(plainTextByte)/limit+1)
 	var chunk []byte
 	for len(plainTextByte) >= limit {
