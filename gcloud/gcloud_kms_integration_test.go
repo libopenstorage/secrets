@@ -3,6 +3,11 @@
 package gcloud
 
 import (
+	crand "crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -16,15 +21,21 @@ import (
 )
 
 const (
-	testSecretIdWithPassphrase      = "openstorage_secret_with_passphrase"
-	testSecretIdWithLargePassphrase = "openstorage_secret_with_large_passpharse"
-	testSecretId                    = "openstorage_secret"
-	testSecretIdWithPublic          = "openstorage_secret_with_public"
+	testSecretIdWithPassphrase           = "openstorage_secret_with_passphrase"
+	testSecretIdWithLargePassphrase      = "openstorage_secret_with_large_passpharse"
+	testSecretIdWithRSASizePassphrase    = "openstorage_secret_with_rsa_size_passphrase"
+	testSecretId                         = "openstorage_secret"
+	testSecretIdForBackwardCompatibility = "openstorage_secret_backward_compatible"
+	testSecretIdWithPublic               = "openstorage_secret_with_public"
+)
+
+var (
+	secretConfig map[string]interface{}
 )
 
 func TestAll(t *testing.T) {
 	// Set the relevant environmnet fields for google cloud.
-	secretConfig := make(map[string]interface{})
+	secretConfig = make(map[string]interface{})
 	// Fill in the appropriate keys and values
 	secretConfig[GoogleKmsResourceKey] = os.Getenv(GoogleKmsResourceKey)
 
@@ -44,9 +55,8 @@ func TestAll(t *testing.T) {
 
 type gcloudSecretTest struct {
 	s               secrets.Secrets
-	passphrase      string
-	largePassphrase string
-	totalPuts       int
+	testPassphrases map[string]string
+	testSecretIds   []string
 }
 
 func NewGcloudSecretTest(secretConfig map[string]interface{}) (test.SecretTest, error) {
@@ -54,13 +64,14 @@ func NewGcloudSecretTest(secretConfig map[string]interface{}) (test.SecretTest, 
 	if err != nil {
 		return nil, err
 	}
-	return &gcloudSecretTest{s, "", 0}, nil
+	m := make(map[string]string)
+	return &gcloudSecretTest{s, m, []string{}}, nil
 }
 
 func (i *gcloudSecretTest) TestPutSecret(t *testing.T) error {
 	secretData := make(map[string]interface{})
-	i.passphrase = uuid.New()
-	secretData[testSecretIdWithPassphrase] = i.passphrase
+	i.testPassphrases[testSecretIdWithPassphrase] = uuid.New()
+	secretData[testSecretIdWithPassphrase] = i.testPassphrases[testSecretIdWithPassphrase]
 
 	// PutSecret with non-nil secretData and no key context
 	err := i.s.PutSecret(testSecretIdWithPassphrase, secretData, nil)
@@ -81,14 +92,7 @@ func (i *gcloudSecretTest) TestPutSecret(t *testing.T) error {
 	// Successful PutSecret with custom secret data
 	err = i.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
-	i.totalPuts++
-
-	// Put Secret with large secret data text
-	i.largePassphrase = randSeq(2000)
-	secretData[testSecretIdWithLargePassphrase] = i.largePassphrase
-	err = i.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
-	assert.NoError(t, err, "Unexpected error on PutSecret")
-	i.totalPuts++
+	i.testSecretIds = append(i.testSecretIds, testSecretIdWithPassphrase)
 
 	// PutSecret with nil secretData
 	err = i.s.PutSecret(testSecretId, nil, nil)
@@ -118,8 +122,68 @@ func (i *gcloudSecretTest) TestPutSecret(t *testing.T) error {
 	putSecretData[testSecretIdWithPublic] = dek
 	err = i.s.PutSecret(testSecretIdWithPublic, putSecretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
-	i.totalPuts++
+	i.testSecretIds = append(i.testSecretIds, testSecretIdWithPublic)
+
+	// adding test cases for different input size
+	// 1. passphrase == rsa limit
+	// 2. passphrase < rsa limit (covered by above)
+	// 3. passphrase > rsa limit
+	i.TestPutEqualTextSecrets(t)
+	i.TestPutLargeTextSecrets(t)
+	// adding test case for backward compatibility
+	i.TestPutSecretBackwardCompatible(t)
+
 	return nil
+}
+
+func (i *gcloudSecretTest) TestPutEqualTextSecrets(t *testing.T) {
+	secretData := make(map[string]interface{})
+
+	keyContext := make(map[string]string)
+	keyContext[secrets.CustomSecretData] = "true"
+
+	// calculate the text size to generate
+	// since we serialize the entire map, we need to count in the empty map size
+	g := i.s.(*gcloudKmsSecrets)
+	limit, err := calculateRSALimit(g)
+	assert.NoError(t, err, "Unexpected error on calculating RSA message limit")
+	secretData[testSecretIdWithRSASizePassphrase] = ""
+	emptySecretData, err := json.Marshal(secretData)
+	assert.NoError(t, err, "Unexpected error on Serializing empty data")
+	i.testPassphrases[testSecretIdWithRSASizePassphrase] = randSeq(limit - len(emptySecretData))
+
+	secretData[testSecretIdWithRSASizePassphrase] = i.testPassphrases[testSecretIdWithRSASizePassphrase]
+	err = i.s.PutSecret(testSecretIdWithRSASizePassphrase, secretData, keyContext)
+	assert.NoError(t, err, "Unexpected error on PutEqualTextSecrets")
+	i.testSecretIds = append(i.testSecretIds, testSecretIdWithRSASizePassphrase)
+}
+
+func (i *gcloudSecretTest) TestPutLargeTextSecrets(t *testing.T) {
+	secretData := make(map[string]interface{})
+
+	keyContext := make(map[string]string)
+	keyContext[secrets.CustomSecretData] = "true"
+
+	// Put Secret with large secret data text
+	i.testPassphrases[testSecretIdWithLargePassphrase] = randSeq(2000)
+	secretData[testSecretIdWithLargePassphrase] = i.testPassphrases[testSecretIdWithLargePassphrase]
+	err := i.s.PutSecret(testSecretIdWithLargePassphrase, secretData, keyContext)
+	assert.NoError(t, err, "Unexpected error on PutLargeTextSecrets")
+	i.testSecretIds = append(i.testSecretIds, testSecretIdWithLargePassphrase)
+}
+
+func (i *gcloudSecretTest) TestPutSecretBackwardCompatible(t *testing.T) {
+	secretData := make(map[string]interface{})
+
+	keyContext := make(map[string]string)
+	keyContext[secrets.CustomSecretData] = "true"
+
+	i.testPassphrases[testSecretIdForBackwardCompatibility] = uuid.New()
+	secretData[testSecretIdForBackwardCompatibility] = i.testPassphrases[testSecretIdForBackwardCompatibility]
+	g := i.s.(*gcloudKmsSecrets)
+	err := g.putSecret(testSecretIdForBackwardCompatibility, secretData, keyContext)
+	assert.NoError(t, err, "Unexpected error on PutSecret for backward ompatibility")
+	i.testSecretIds = append(i.testSecretIds, testSecretIdForBackwardCompatibility)
 }
 
 func (i *gcloudSecretTest) TestGetSecret(t *testing.T) error {
@@ -127,24 +191,16 @@ func (i *gcloudSecretTest) TestGetSecret(t *testing.T) error {
 	_, err := i.s.GetSecret("dummy", nil)
 	assert.Error(t, err, "Expected GetSecret to fail")
 
-	// GetSecret using a secretId with data
-	keyContext := make(map[string]string)
-	keyContext[secrets.CustomSecretData] = "true"
-	plainText1, err := i.s.GetSecret(testSecretIdWithPassphrase, keyContext)
-	assert.NoError(t, err, "Unexpected error on GetSecret")
-	// We have got secretData
-	assert.NotNil(t, plainText1, "Invalid plainText was returned")
-	v, ok := plainText1[testSecretIdWithPassphrase]
-	assert.True(t, ok, "Unexpected plainText")
-	str, ok := v.(string)
-	assert.True(t, ok, "Unexpected plainText")
-	assert.Equal(t, str, i.passphrase, "Unexpected passphrase")
+	// GetSecret using a secretId with data for custom data
+	i.TestGetCustomSecrets(t)
 
 	// GetSecret using a secretId without data
 	_, err = i.s.GetSecret(testSecretId, nil)
 	assert.Error(t, secrets.ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret")
 
+	keyContext := make(map[string]string)
 	// Both the flags are set
+	keyContext[secrets.CustomSecretData] = "true"
 	keyContext[secrets.PublicSecretData] = "true"
 	_, err = i.s.GetSecret(testSecretIdWithPublic, keyContext)
 	errInvalidContext, ok := err.(*secrets.ErrInvalidKeyContext)
@@ -169,29 +225,129 @@ func (i *gcloudSecretTest) TestGetSecret(t *testing.T) error {
 	return nil
 }
 
+func (i *gcloudSecretTest) TestGetCustomSecrets(t *testing.T) {
+
+	keyContext := make(map[string]string)
+	keyContext[secrets.CustomSecretData] = "true"
+
+	for _, secretId := range i.testSecretIds {
+		fmt.Println("Getting secret from: ", secretId)
+		// skip public data
+		if secretId == testSecretIdWithPublic {
+			continue
+		}
+
+		plaintext, err := i.s.GetSecret(secretId, keyContext)
+		assert.NoError(t, err, "Unexpected error on GetSecret")
+		// We have got secretData
+		assert.NotNil(t, plaintext, "Invalid plainText was returned")
+		v, ok := plaintext[secretId]
+		assert.True(t, ok, "Unexpected plainText")
+		str, ok := v.(string)
+		assert.True(t, ok, "Unexpected plainText")
+		assert.Equal(t, str, i.testPassphrases[secretId], "Unexpected passphrase")
+	}
+}
+
 func (i *gcloudSecretTest) TestListSecrets(t *testing.T) error {
 	ids, err := i.s.ListSecrets()
 	assert.NoError(t, err, "Unexpected error on ListSecrets")
-	assert.Equal(t, len(ids), i.totalPuts, "Unexpected number of secrets listed")
+	assert.Equal(t, len(ids), len(i.testSecretIds), "Unexpected number of secrets listed")
 	return nil
 }
 
 func (i *gcloudSecretTest) TestDeleteSecret(t *testing.T) error {
-	// Delete of a key that exists should succeed
-	err := i.s.DeleteSecret(testSecretId, nil)
-	assert.NoError(t, err, "Unexpected error on DeleteSecret")
 
-	// Get of a deleted key should fail
-	_, err = i.s.GetSecret(testSecretId, nil)
-	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Expected an error on GetSecret after the key is deleted")
+	for _, secretId := range i.testSecretIds {
+		fmt.Println("Deleting secret in: ", secretId)
+		// Delete of a key that exists should succeed
+		err := i.s.DeleteSecret(secretId, nil)
+		assert.NoError(t, err, "Unexpected error on DeleteSecret")
+
+		// Get of a deleted key should fail
+		_, err = i.s.GetSecret(secretId, nil)
+		assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Expected an error on GetSecret after the key is deleted")
+	}
 
 	// Delete of a non-existent key should also succeed
-	err = i.s.DeleteSecret("dummy", nil)
+	err := i.s.DeleteSecret("dummy", nil)
 	assert.NoError(t, err, "Unepxected error on DeleteSecret")
 	return nil
 }
 
+// putSerect is the previous implementation without handling on large plaintext
+// this is used for backward compatibility
+func (g *gcloudKmsSecrets) putSecret(
+	secretId string,
+	secretData map[string]interface{},
+	keyContext map[string]string,
+) error {
+	var (
+		dek []byte
+	)
+	_, override := keyContext[secrets.OverwriteSecretDataInStore]
+	_, customData := keyContext[secrets.CustomSecretData]
+	_, publicData := keyContext[secrets.PublicSecretData]
+
+	if err := secrets.KeyContextChecks(keyContext, secretData); err != nil {
+		return err
+	} else if publicData && len(secretData) > 0 {
+		publicDek, ok := secretData[secretId]
+		if !ok {
+			return secrets.ErrInvalidSecretData
+		}
+		dek, ok = publicDek.([]byte)
+		if !ok {
+			return &secrets.ErrInvalidKeyContext{
+				Reason: "secret data when PublicSecretData flag is set should be of the type []byte",
+			}
+		}
+	} else if len(secretData) > 0 && customData {
+		// Wrap the custom secret data and create a new entry in store
+		// with the input secretID and the returned dek
+		plainTextByte, err := json.Marshal(secretData)
+		if err != nil {
+			return err
+		}
+		publicKey, err := g.getAsymmetricPublicKey()
+		if err != nil {
+			return err
+		}
+		// encrypt the plain text
+		rsaKey := publicKey.(*rsa.PublicKey)
+		dek, err = rsa.EncryptOAEP(sha256.New(), crand.Reader, rsaKey, plainTextByte, nil)
+		if err != nil {
+			return fmt.Errorf("encryption for secret failed: %v", err)
+		}
+
+	} else {
+		return secrets.ErrEmptySecretData
+	}
+
+	return g.ps.Set(
+		secretId,
+		dek,
+		nil,
+		nil,
+		override,
+	)
+}
+
+// calculateRSALimit returns the RSA Limit given the gcloudKmsSecrets object
+func calculateRSALimit(g *gcloudKmsSecrets) (int, error) {
+	publicKey, err := g.getAsymmetricPublicKey()
+	if err != nil {
+		return 0, err
+	}
+	// encrypt the plain text
+	rsaKey := publicKey.(*rsa.PublicKey)
+
+	hash := sha256.New()
+	return getRSALimit(rsaKey, &hash), nil
+}
+
 func TestNewWithKVDB(t *testing.T) {
+	secretConfig = make(map[string]interface{})
 	// With kvdbPersistenceStore
 	kv, err := kvdb.New(mem.Name, "openstorage/", nil, nil, nil)
 	if err != nil {
@@ -202,12 +358,13 @@ func TestNewWithKVDB(t *testing.T) {
 	// kvdb key is correct
 	secretConfig[KMSKvdbKey] = kv
 	kp, err := New(secretConfig)
-	assert.EqualError(t, err, ErrGoogleKmsResourceKeyNotProvided.Error(), "Unepxected error when Kvdb Key not provided")
+	// assert.EqualError(t, err, ErrGoogleKmsResourceKeyNotProvided.Error(), "Unepxected error when Kvdb Key not provided")
 
 	secretConfig[GoogleKmsResourceKey] = "crk"
 	kp, err = New(secretConfig)
 	assert.NotNil(t, kp, "Expected New API to succeed")
 	assert.NoError(t, err, "Unepxected error on New")
+	return
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")

@@ -187,6 +187,8 @@ func (g *gcloudKmsSecrets) PutSecret(
 	)
 }
 
+// The message must be no longer than the length of the public modulus minus twice the hash length, minus a further 2.
+// Refer to the rsa Encrypt docs for details: https://pkg.go.dev/crypto/rsa#EncryptOAEP
 func getRSALimit(pk *rsa.PublicKey, hash *hash.Hash) int {
 	return pk.Size() - 2*(*hash).Size() - 2
 }
@@ -197,9 +199,11 @@ func getRSALimit(pk *rsa.PublicKey, hash *hash.Hash) int {
 func decryptToPlaintext(g *gcloudKmsSecrets, dek []byte) ([]byte, error) {
 	var plaintext []byte
 	var dekMap map[int][]byte
-
-	if err := json.Unmarshal(dek, &dekMap); err != nil {
-		return nil, err
+	var err error
+	if err = json.Unmarshal(dek, &dekMap); err != nil {
+		fmt.Println("error deseralizing gcloud dek, returning the entire dek input for backward Compatibility")
+		dekMap = make(map[int][]byte)
+		dekMap[0] = dek
 	}
 
 	for i := 0; i < len(dekMap); i++ {
