@@ -201,7 +201,7 @@ func decryptToPlaintext(g *gcloudKmsSecrets, dek []byte) ([]byte, error) {
 	var dekMap map[int][]byte
 	var err error
 	if err = json.Unmarshal(dek, &dekMap); err != nil {
-		fmt.Println("error deseralizing gcloud dek, returning the entire dek input for backward Compatibility")
+		fmt.Printf("error deseralizing gcloud dek, returning the entire dek input for backward compatibility. deserialize err: %v\n", err)
 		dekMap = make(map[int][]byte)
 		dekMap[0] = dek
 	}
