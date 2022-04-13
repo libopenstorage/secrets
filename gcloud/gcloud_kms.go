@@ -201,7 +201,6 @@ func decryptToPlaintext(g *gcloudKmsSecrets, dek []byte) ([]byte, error) {
 	var dekMap map[int][]byte
 	var err error
 	if err = json.Unmarshal(dek, &dekMap); err != nil {
-		fmt.Printf("error deseralizing gcloud dek, returning the entire dek input for backward compatibility. deserialize err: %v\n", err)
 		dekMap = make(map[int][]byte)
 		dekMap[0] = dek
 	}
@@ -228,7 +227,7 @@ func decryptToPlaintext(g *gcloudKmsSecrets, dek []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// encryptPlaintextByChunks divids the plainTextBytes into chunks that are within the limit. Then
+// encryptPlaintextByChunks divides the plainTextBytes into chunks that are within the limit. Then
 // encrypts each chunk one by one and store them in map. Finally return the serialized map.
 func encryptPlaintextByChunks(plainTextByte []byte, rsaKey *rsa.PublicKey, hash hash.Hash) ([]byte, error) {
 	limit := getRSALimit(rsaKey, &hash)
