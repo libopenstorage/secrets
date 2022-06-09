@@ -10,18 +10,18 @@ require (
 	github.com/IBM/keyprotect-go-client v0.5.1
 	github.com/aws/aws-sdk-go v1.25.41
 	github.com/golang/mock v1.4.3
-	github.com/hashicorp/go-hclog v0.14.1
+	github.com/hashicorp/go-hclog v0.16.2
 	github.com/hashicorp/vault v1.4.2
-	github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
+	github.com/hashicorp/vault/api v1.3.0
+	github.com/hashicorp/vault/api/auth/approle v0.1.1
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611
 	github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467
 	github.com/portworx/sched-ops v0.0.0-20200831185134-3e8010dc7056
 	github.com/sirupsen/logrus v1.4.2
-	github.com/stretchr/testify v1.4.0
-	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
+	github.com/stretchr/testify v1.7.0
+	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	google.golang.org/api v0.14.0
-	google.golang.org/protobuf v1.25.0 // indirect
 )
 
 replace (
