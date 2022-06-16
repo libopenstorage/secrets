@@ -25,6 +25,7 @@ require (
 )
 
 replace (
+	google.golang.org/grpc => google.golang.org/grpc v1.29.0 
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 	github.com/hashicorp/consul => github.com/hashicorp/consul v1.5.1
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v5.1.0-openstorage+incompatible
