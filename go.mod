@@ -25,12 +25,12 @@ require (
 )
 
 replace (
-	google.golang.org/grpc => google.golang.org/grpc v1.29.0 
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 	github.com/hashicorp/consul => github.com/hashicorp/consul v1.5.1
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v5.1.0-openstorage+incompatible
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.1.0-openstorage+incompatible
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v1.8.2-0.20190424153033-d3245f150225
+	google.golang.org/grpc => google.golang.org/grpc v1.29.0
 	k8s.io/api => k8s.io/api v0.15.11
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.15.11
 	k8s.io/apimachinery => k8s.io/apimachinery v0.15.11
