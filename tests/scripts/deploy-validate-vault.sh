@@ -45,12 +45,16 @@ function deploy_vault {
   #enable kv engine v1 for osd and v2 for rgw encryption respectively in different path
   kubectl exec -ti vault-0 -- vault secrets enable -path=secret/ver1 kv
   kubectl exec -ti vault-0 -- vault secrets enable -path=secret/ver2 kv-v2
+  kubectl exec -ti vault-0 -- vault secrets enable -path=test/secret kv
   kubectl exec -ti vault-0 -- vault kv list || true # failure is expected
   kubectl exec -ti vault-0 -- vault kv list || true # failure is expected
   
   # Configure Vault Policy
   echo '
   path "secret/*" {
+    capabilities = ["create", "read", "update", "delete", "list"]
+  }
+  path "test/*" {
     capabilities = ["create", "read", "update", "delete", "list"]
   }
   path "sys/mounts" {

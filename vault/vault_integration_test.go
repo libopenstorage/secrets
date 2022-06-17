@@ -12,8 +12,12 @@ import (
 )
 
 func TestAllWithDefaultBackend(t *testing.T) {
-	// Set the relevant environment fields for vault.
-	vs, err := NewVaultSecretTest(nil)
+	// using DefaultBackend conflicts with ci test
+	// instead using secret/ver1 for explicit backend path
+	secretConfig := map[string]interface{}{
+		"VAULT_BACKEND_PATH": "secret/ver1",
+	}
+	vs, err := NewVaultSecretTest(secretConfig)
 	if err != nil {
 		t.Fatalf("Unable to create a Vault Secret instance: %v", err)
 	}
