@@ -38,6 +38,14 @@ jobs:
         kubectl port-forward vault-0 8200:8200 &
         VAULT_TOKEN=$(< vault-token) make ci-test
 
+    - name: run vault token integration test
+      run: |
+        VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$(< vault-token) make integration-test
+
+    - name: run vault approle integration test
+      run: |
+        VAULT_ADDR=http://127.0.0.1:8200 VAULT_AUTH_METHOD=approle VAULT_APPROLE_ROLE_ID=$(< vault-role_id) VAULT_APPROLE_SECRET_ID=$(< vault-secret_id) make integration-test
+
     - name: validate vault keys are gone
       run: tests/scripts/deploy-validate-vault.sh validate
 

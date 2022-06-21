@@ -18,6 +18,7 @@ func setup() {
 	os.Unsetenv(api.EnvVaultAddress)
 	os.Unsetenv(api.EnvVaultMaxRetries)
 	os.Unsetenv(api.EnvVaultInsecure)
+	os.Unsetenv(AuthMethod)
 }
 
 func TestNew(t *testing.T) {

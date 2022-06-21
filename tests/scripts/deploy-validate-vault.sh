@@ -45,6 +45,7 @@ function deploy_vault {
   #enable kv engine v1 for osd and v2 for rgw encryption respectively in different path
   kubectl exec -ti vault-0 -- vault secrets enable -path=secret/ver1 kv
   kubectl exec -ti vault-0 -- vault secrets enable -path=secret/ver2 kv-v2
+  kubectl exec -ti vault-0 -- vault secrets enable -path=test/secret kv
   kubectl exec -ti vault-0 -- vault kv list || true # failure is expected
   kubectl exec -ti vault-0 -- vault kv list || true # failure is expected
   
@@ -53,12 +54,24 @@ function deploy_vault {
   path "secret/*" {
     capabilities = ["create", "read", "update", "delete", "list"]
   }
+  path "test/*" {
+    capabilities = ["create", "read", "update", "delete", "list"]
+  }
   path "sys/mounts" {
   capabilities = ["read"]
   }'| kubectl exec -i vault-0 -- vault policy write secret -
   
   # Create a token for the integration test
   kubectl exec vault-0 -- vault token create -policy=secret -format json |jq -r '.auth.client_token' > vault-token
+
+  # setup approle
+  kubectl exec -ti vault-0 -- vault auth enable approle
+  # create a new role with correct policy
+  kubectl exec -ti vault-0 -- vault write auth/approle/role/my-role token_policies=secret
+
+  kubectl exec -ti vault-0 -- vault read auth/approle/role/my-role/role-id -format=json | jq -r .data.role_id > vault-role_id
+  kubectl exec -ti vault-0 -- vault write auth/approle/role/my-role/secret-id -format=json | jq -r .data.secret_id > vault-secret_id
+
 }
 
 function validate_list_secrets {
