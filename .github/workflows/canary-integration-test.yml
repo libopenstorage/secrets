@@ -12,6 +12,7 @@ defaults:
 jobs:
   vault:
     runs-on: ubuntu-18.04
+    if: ${{ github.event.label.name == 'vault' }}
     steps:
     - name: checkout
       uses: actions/checkout@v2
