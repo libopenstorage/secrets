@@ -137,30 +137,33 @@ func Authenticate(client *api.Client, config map[string]interface{}) (token stri
 // GetAuthToken tries to get the vault token for the provided authentication method.
 func GetAuthToken(client *api.Client, config map[string]interface{}) (string, error) {
 	method := GetVaultParam(config, AuthMethod)
+	var secret *api.Secret
+	var err error
 	switch method {
 	case AuthMethodKubernetes:
 		path, _, data, err := authenticate(client, config)
 		if err != nil {
 			return "", err
 		}
+		secret, err = client.Logical().Write(path, data)
 
-		secret, err := client.Logical().Write(path, data)
-		if err != nil {
-			return "", err
-		}
-		if secret == nil || secret.Auth == nil {
-			return "", errors.New("authentication returned nil auth info")
-		}
-		if secret.Auth.ClientToken == "" {
-			return "", errors.New("authentication returned empty client token")
-		}
-
-		return secret.Auth.ClientToken, err
 	case AuthMethodAppRole:
-		return authAppRole(client, config)
+		secret, err = authAppRole(client, config)
+	default:
+		return "", ErrAuthMethodUnknown
 	}
-	return "", ErrAuthMethodUnknown
 
+	if err != nil {
+		return "", err
+	}
+	if secret == nil || secret.Auth == nil {
+		return "", errors.New("authentication returned nil auth info")
+	}
+	if secret.Auth.ClientToken == "" {
+		return "", errors.New("authentication returned empty client token")
+	}
+
+	return secret.Auth.ClientToken, nil
 }
 
 func authenticate(client *api.Client, config map[string]interface{}) (string, http.Header, map[string]interface{}, error) {
@@ -185,12 +188,12 @@ func authKubernetes(client *api.Client, config map[string]interface{}) (string, 
 	return method.Authenticate(context.TODO(), client)
 }
 
-func authAppRole(client *api.Client, config map[string]interface{}) (string, error) {
+func authAppRole(client *api.Client, config map[string]interface{}) (*api.Secret, error) {
 	roleID := GetVaultParam(config, AuthAppRoleRoleID)
 	secretIDRaw := GetVaultParam(config, AuthAppRoleSecretID)
 
 	if roleID == "" || secretIDRaw == "" {
-		return "", ErrAppRoleIDNotSet
+		return nil, ErrAppRoleIDNotSet
 	}
 	secretID := &approle.SecretID{FromString: secretIDRaw}
 
@@ -199,13 +202,10 @@ func authAppRole(client *api.Client, config map[string]interface{}) (string, err
 		secretID,
 	)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	authInfo, err := client.Auth().Login(context.TODO(), appRoleAuth)
-
-	return authInfo.Auth.ClientToken, nil
-
+	return client.Auth().Login(context.TODO(), appRoleAuth)
 }
 
 func buildAuthConfig(config map[string]interface{}) (*auth.AuthConfig, error) {
