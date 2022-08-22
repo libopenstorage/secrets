@@ -15,6 +15,7 @@ import (
 	"github.com/libopenstorage/secrets/vault/utils"
 	"github.com/libopenstorage/secrets/vaulttransit/client/transit"
 	"github.com/portworx/kvdb"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -108,6 +109,14 @@ func New(
 		return nil, fmt.Errorf("failed to get the authentication token: %w", err)
 	}
 	client.SetToken(token)
+
+	authMethod := "token"
+	method := utils.GetVaultParam(secretConfig, utils.AuthMethod)
+	if method != "" && utils.GetVaultParam(secretConfig, api.EnvVaultToken) == "" {
+		authMethod = method
+	}
+
+	logrus.Infof("Authenticated to Vault Transit with %v\n", authMethod)
 
 	userEncryptionKey := utils.GetVaultParam(secretConfig, EncryptionKey)
 	// vault namespace has been already set to the client
