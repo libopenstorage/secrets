@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/vault/api"
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/vault/utils"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -101,6 +102,14 @@ func New(
 		return nil, fmt.Errorf("failed to get the authentication token: %w", err)
 	}
 	client.SetToken(token)
+
+	authMethod := "token"
+	method := utils.GetVaultParam(secretConfig, AuthMethod)
+	if method != "" && utils.GetVaultParam(secretConfig, api.EnvVaultToken) == "" {
+		authMethod = method
+	}
+
+	logrus.Infof("Authenticated to Vault with %v\n", authMethod)
 
 	backendPath := utils.GetVaultParam(secretConfig, VaultBackendPathKey)
 	if backendPath == "" {
