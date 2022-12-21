@@ -87,7 +87,6 @@ func (a *awsSecretsMgr) GetSecret(
 	secretId string,
 	keyContext map[string]string,
 ) (map[string]interface{}, error) {
-	// Check if there already exists a key
 	secretValueOutput, err := a.scm.GetSecretValue(&secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretId),
 	})
@@ -206,23 +205,6 @@ func (a *awsSecretsMgr) Rencrypt(
 	encryptedData string,
 ) (string, error) {
 	return "", secrets.ErrNotSupported
-}
-
-func getAWSKeyContext(keyContext map[string]string) map[string]*string {
-	if keyContext == nil {
-		return nil
-	}
-	encKeyContext := make(map[string]*string)
-	for k, v := range keyContext {
-		if k == secrets.CustomSecretData ||
-			k == secrets.PublicSecretData ||
-			k == secrets.OverwriteSecretDataInStore {
-			// Do not add our keys to aws context
-			continue
-		}
-		encKeyContext[k] = &v
-	}
-	return encKeyContext
 }
 
 func init() {
