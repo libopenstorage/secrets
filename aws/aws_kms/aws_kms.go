@@ -1,9 +1,9 @@
-package aws
+package aws_kms
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
+	"github.com/libopenstorage/secrets/aws/utils"
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,30 +18,13 @@ import (
 
 const (
 	// Name of the secret store
-	Name = secrets.TypeAWS
-	// AwsAccessKey corresponds to AWS credential AWS_ACCESS_KEY_ID
-	AwsAccessKey = "AWS_ACCESS_KEY_ID"
-	// AwsSecretAccessKey corresponds to AWS credential AWS_SECRET_ACCESS_KEY
-	AwsSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
-	// AwsTokenKey corresponds to AWS credential AWS_SECRET_TOKEN_KEY
-	AwsTokenKey = "AWS_SECRET_TOKEN_KEY"
-	// AwsRegionKey defines the AWS region
-	AwsRegionKey = "AWS_REGION"
+	Name = secrets.TypeAWSKMS
 	// AwsCMKey defines the KMS customer master key
 	AwsCMKey = "AWS_CMK"
 	// KMSKvdbKey is used to setup AWS KMS Secret Store with kvdb for persistence.
 	KMSKvdbKey         = "KMS_KVDB"
 	kvdbPublicBasePath = "aws_kms/secrets/public/"
 	kvdbDataBasePath   = "aws_kms/secrets/data/"
-)
-
-var (
-	// ErrCMKNotProvided is returned when CMK is not provided.
-	ErrCMKNotProvided = errors.New("AWS CMK not provided. Cannot perform KMS operations.")
-	// ErrAWSRegionNotProvided is returned when region is not provided.
-	ErrAWSRegionNotProvided = errors.New("AWS Region not provided. Cannot perform KMS operations.")
-	// ErrInvalidKvdbProvided is returned when an incorrect KVDB implementation is provided for persistence store.
-	ErrInvalidKvdbProvided = errors.New("Invalid kvdb provided. AWS KMS works in conjuction with a kvdb")
 )
 
 type awsKmsSecrets struct {
@@ -57,7 +40,7 @@ func New(
 	secretConfig map[string]interface{},
 ) (secrets.Secrets, error) {
 	if secretConfig == nil {
-		return nil, ErrCMKNotProvided
+		return nil, utils.ErrCMKNotProvided
 	}
 	var ps store.PersistenceStore
 
@@ -66,30 +49,30 @@ func New(
 	if cmk == "" {
 		cmk = os.Getenv(AwsCMKey)
 		if cmk == "" {
-			return nil, ErrCMKNotProvided
+			return nil, utils.ErrCMKNotProvided
 		}
 
 	}
-	v, _ = secretConfig[AwsRegionKey]
+	v, _ = secretConfig[utils.AwsRegionKey]
 	region, _ := v.(string)
 	if region == "" {
-		region = os.Getenv(AwsRegionKey)
+		region = os.Getenv(utils.AwsRegionKey)
 		if region == "" {
-			return nil, ErrAWSRegionNotProvided
+			return nil, utils.ErrAWSRegionNotProvided
 		}
 	}
 	v, ok := secretConfig[KMSKvdbKey]
 	if ok {
 		kv, ok := v.(kvdb.Kvdb)
 		if !ok {
-			return nil, ErrInvalidKvdbProvided
+			return nil, utils.ErrInvalidKvdbProvided
 		}
 		ps = store.NewKvdbPersistenceStore(kv, kvdbPublicBasePath, kvdbDataBasePath)
 	} else {
 		ps = store.NewFilePersistenceStore()
 	}
 
-	id, secret, token, err := authKeys(secretConfig)
+	id, secret, token, err := utils.AuthKeys(secretConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -273,37 +256,6 @@ func (a *awsKmsSecrets) Rencrypt(
 	encryptedData string,
 ) (string, error) {
 	return "", secrets.ErrNotSupported
-}
-
-func authKeys(params map[string]interface{}) (string, string, string, error) {
-	accessKey, err := getAuthKey(AwsAccessKey, params)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	secretKey, err := getAuthKey(AwsSecretAccessKey, params)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	secretToken, err := getAuthKey(AwsTokenKey, params)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	return accessKey, secretKey, secretToken, nil
-}
-
-func getAuthKey(key string, params map[string]interface{}) (string, error) {
-	val, ok := params[key]
-	valueStr := ""
-	if ok {
-		valueStr, ok = val.(string)
-		if !ok {
-			return "", fmt.Errorf("Authentication error. Invalid value for %v", key)
-		}
-	}
-	return valueStr, nil
 }
 
 func getAWSKeyContext(keyContext map[string]string) map[string]*string {

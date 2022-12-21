@@ -1,6 +1,7 @@
-package aws
+package aws_kms
 
 import (
+	"github.com/libopenstorage/secrets/aws/utils"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,19 +15,19 @@ func TestNew(t *testing.T) {
 	}{
 		{
 			name:        "config is not provided",
-			expectedErr: ErrCMKNotProvided,
+			expectedErr: utils.ErrCMKNotProvided,
 		},
 		{
 			name:        "cmk key is not provided",
 			cfg:         map[string]interface{}{},
-			expectedErr: ErrCMKNotProvided,
+			expectedErr: utils.ErrCMKNotProvided,
 		},
 		{
 			name: "region is not provided",
 			cfg: map[string]interface{}{
 				AwsCMKey: "key1",
 			},
-			expectedErr: ErrAWSRegionNotProvided,
+			expectedErr: utils.ErrAWSRegionNotProvided,
 		},
 	}
 

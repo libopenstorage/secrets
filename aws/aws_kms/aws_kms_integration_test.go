@@ -1,6 +1,7 @@
+//go:build integration
 // +build integration
 
-package aws
+package aws_kms
 
 import (
 	"os"
