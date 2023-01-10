@@ -10,6 +10,7 @@ require (
 	github.com/IBM/keyprotect-go-client v0.5.1
 	github.com/aws/aws-sdk-go v1.44.164
 	github.com/golang/mock v1.6.0
+	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/hashicorp/vault v1.12.2
 	github.com/hashicorp/vault/api v1.8.0
@@ -17,12 +18,16 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611
 	github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467
-	github.com/portworx/sched-ops v0.0.0-20200831185134-3e8010dc7056
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20220208024433-611d861089d4
 	github.com/shirou/gopsutil v2.19.9+incompatible // indirect
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.0
+	github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802 // indirect
 	golang.org/x/oauth2 v0.0.0-20220524215830-622c5d57e401
 	google.golang.org/api v0.83.0
+	google.golang.org/grpc v1.47.0
+	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1 // indirect
+
 )
 
 replace (
@@ -32,7 +37,6 @@ replace (
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v5.1.0-openstorage+incompatible
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.1.0-openstorage+incompatible
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v1.8.2-0.20190424153033-d3245f150225
-	google.golang.org/grpc => google.golang.org/grpc v1.29.0
 
 	k8s.io/api => k8s.io/api v0.25.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.1

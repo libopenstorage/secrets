@@ -4,6 +4,7 @@
 package aws_secrets_manager
 
 import (
+	"os"
 	"testing"
 
 	"github.com/libopenstorage/secrets"

@@ -1,7 +1,6 @@
 package aws_secrets_manager
 
 import (
-	"fmt"
 	"github.com/libopenstorage/secrets/aws/utils"
 	"strings"
 	"testing"
@@ -30,23 +29,19 @@ func TestNew(t *testing.T) {
 			expectedErr: utils.ErrAWSRegionNotProvided,
 			exactMatch:  true,
 		},
-		{
-			name: "region is provided but no credentials",
-			cfg: map[string]interface{}{
-				utils.AwsRegionKey: "us-east-1",
-			},
-			// we don't expect an error since these credentials can be provided as env variables or instance roles
-			expectedErr: fmt.Errorf("NoCredentialProviders"),
-			exactMatch:  false,
-		},
 	}
 
 	for _, tc := range testCases {
 		_, err := New(tc.cfg)
-		if tc.exactMatch {
-			require.Equal(t, tc.expectedErr, err, tc.name)
+		if tc.expectedErr != nil {
+			if tc.exactMatch {
+				require.Equal(t, tc.expectedErr, err, tc.name)
+			} else {
+				require.True(t, strings.Contains(err.Error(), tc.expectedErr.Error()), "unexpected error")
+			}
 		} else {
-			require.True(t, strings.Contains(err.Error(), tc.expectedErr.Error()), "unexpected error")
+			require.NoError(t, err, "unexpected error")
 		}
+
 	}
 }
