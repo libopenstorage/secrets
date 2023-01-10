@@ -160,7 +160,10 @@ func (a *awsSecretsMgr) DeleteSecret(
 			ForceDeleteWithoutRecovery: aws.Bool(true),
 			SecretId:                   aws.String(secretId),
 		})
-		return &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
+		if err != nil {
+			return &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
+		}
+		return nil
 	}
 
 	retentionPeriodInDays, err := strconv.Atoi(retentionPeriod)
@@ -174,7 +177,10 @@ func (a *awsSecretsMgr) DeleteSecret(
 		SecretId:             aws.String(secretId),
 		RecoveryWindowInDays: aws.Int64(int64(retentionPeriodInDays)),
 	})
-	return &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
+	if err != nil {
+		return &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
+	}
+	return nil
 }
 
 func (a *awsSecretsMgr) ListSecrets() ([]string, error) {

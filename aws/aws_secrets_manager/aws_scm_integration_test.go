@@ -10,17 +10,14 @@ import (
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/aws/utils"
 	"github.com/libopenstorage/secrets/test"
+	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/assert"
-)
-
-const (
-	secretIdWithData    = "openstorage_secret_data"
-	secretIdWithoutData = "openstorage_secret"
 )
 
 func TestAll(t *testing.T) {
 	// Set the relevant environmnet fields for aws.
 	secretConfig := make(map[string]interface{})
+
 	// Fill in the appropriate keys and values
 	secretConfig[utils.AwsRegionKey] = os.Getenv(utils.AwsRegionKey)
 	secretConfig[utils.AwsSecretAccessKey] = os.Getenv(utils.AwsSecretAccessKey)
@@ -35,8 +32,10 @@ func TestAll(t *testing.T) {
 }
 
 type awsSecretTest struct {
-	s         secrets.Secrets
-	totalPuts int
+	s                   secrets.Secrets
+	totalPuts           int
+	secretIdWithData    string
+	secretIdWithoutData string
 }
 
 func NewAwsSecretTest(secretConfig map[string]interface{}) (test.SecretTest, error) {
@@ -44,7 +43,12 @@ func NewAwsSecretTest(secretConfig map[string]interface{}) (test.SecretTest, err
 	if err != nil {
 		return nil, err
 	}
-	return &awsSecretTest{s, 0}, nil
+	return &awsSecretTest{
+		s:                   s,
+		totalPuts:           0,
+		secretIdWithData:    "openstorage_secret_data_" + uuid.New(),
+		secretIdWithoutData: "openstorage_secret_" + uuid.New(),
+	}, nil
 }
 
 func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
@@ -52,12 +56,12 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 	secretData["key1"] = "value1"
 	secretData["key2"] = "value2"
 	// PutSecret with non-nil secretData
-	err := a.s.PutSecret(secretIdWithData, secretData, nil)
+	err := a.s.PutSecret(a.secretIdWithData, secretData, nil)
 	assert.NoError(t, err, "Unepxected error on PutSecret")
 	a.totalPuts++
 
 	// PutSecret with nil secretData
-	err = a.s.PutSecret(secretIdWithoutData, nil, nil)
+	err = a.s.PutSecret(a.secretIdWithoutData, nil, nil)
 	assert.NoError(t, err, "Expected PutSecret to succeed. Failed with error: %v", err)
 	a.totalPuts++
 
@@ -70,7 +74,7 @@ func (a *awsSecretTest) TestGetSecret(t *testing.T) error {
 	assert.Error(t, err, "Expected GetSecret to fail")
 
 	// GetSecret using a secretId with data
-	plainText1, err := a.s.GetSecret(secretIdWithData, nil)
+	plainText1, err := a.s.GetSecret(a.secretIdWithData, nil)
 	assert.NoError(t, err, "Expected GetSecret to succeed")
 	assert.NotNil(t, plainText1, "Expected plainText to not be nil")
 	v, ok := plainText1["key1"]
@@ -80,7 +84,7 @@ func (a *awsSecretTest) TestGetSecret(t *testing.T) error {
 	assert.Equal(t, str, "value1", "Unexpected secretData")
 
 	// GetSecret using a secretId without data
-	_, err = a.s.GetSecret(secretIdWithoutData, nil)
+	_, err = a.s.GetSecret(a.secretIdWithoutData, nil)
 	assert.NoError(t, err, "Expected GetSecret to succeed")
 
 	return nil
@@ -93,19 +97,19 @@ func (a *awsSecretTest) TestListSecrets(t *testing.T) error {
 
 func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 	// Delete of a key that exists should succeed
-	err := a.s.DeleteSecret(secretIdWithData, nil)
+	err := a.s.DeleteSecret(a.secretIdWithData, nil)
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
 
 	// Get of a deleted key should fail
-	_, err = a.s.GetSecret(secretIdWithData, nil)
+	_, err = a.s.GetSecret(a.secretIdWithData, nil)
 	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret after delete")
 
 	// Delete of a key that exists should succeed
-	err = a.s.DeleteSecret(secretIdWithoutData, nil)
+	err = a.s.DeleteSecret(a.secretIdWithoutData, nil)
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
 
 	// GetSecret using a secretId without data
-	_, err = a.s.GetSecret(secretIdWithoutData, nil)
+	_, err = a.s.GetSecret(a.secretIdWithoutData, nil)
 	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret after delete")
 
 	// Delete of a non-existent key should also succeed
