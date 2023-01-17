@@ -56,7 +56,7 @@ func New(
 	}
 	asc, err := sc.NewAWSCredentials(id, secret, token, true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get credentials: %v", err)
+		return nil, fmt.Errorf("failed to create aws credentials instance: %v", err)
 	}
 	creds, err := asc.Get()
 	if err != nil {
