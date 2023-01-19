@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package vault
@@ -62,10 +63,10 @@ func (v *vaultSecretTest) TestPutSecret(t *testing.T) error {
 	if v.s == nil {
 		t.Fatalf("secrets is nil")
 	}
-	err := v.s.PutSecret(keyId, data, nil)
+	_, err := v.s.PutSecret(keyId, data, nil)
 	assert.NoError(t, err, "Unable to put key into secrets.")
 
-	plainText, err := v.s.GetSecret(keyId, nil)
+	plainText, _, err := v.s.GetSecret(keyId, nil)
 	assert.NoError(t, err, "Unable to get key from secrets")
 	assert.Equal(t, len(data), len(plainText), "Put and Get keys do not match")
 	for k, v := range plainText {
@@ -73,7 +74,7 @@ func (v *vaultSecretTest) TestPutSecret(t *testing.T) error {
 		assert.True(t, exists, "Put and Get values do not match")
 		assert.Equal(t, o, v, "Put and Get values do not match")
 	}
-	_, err = v.s.GetSecret("unknown_key", nil)
+	_, _, err = v.s.GetSecret("unknown_key", nil)
 	assert.Error(t, err, "Expected error when no secret key present")
 
 	err = v.s.DeleteSecret(keyId, nil)

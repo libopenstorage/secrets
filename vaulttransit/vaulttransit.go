@@ -143,11 +143,11 @@ func (v *vaultSecrets) String() string {
 func (v *vaultSecrets) GetSecret(
 	secretID string,
 	keyContext map[string]string,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, secrets.Version, error) {
 	_, customData := keyContext[secrets.CustomSecretData]
 	_, publicData := keyContext[secrets.PublicSecretData]
 	if customData && publicData {
-		return nil, &secrets.ErrInvalidKeyContext{
+		return nil, secrets.NoVersion, &secrets.ErrInvalidKeyContext{
 			Reason: "both CustomSecretData and PublicSecretData flags cannot be set",
 		}
 	}
@@ -155,39 +155,39 @@ func (v *vaultSecrets) GetSecret(
 	key := v.encryptionSecret(keyContext)
 	dek, err := v.getDekFromStore(key.Namespace, secretID)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 
 	secretData := make(map[string]interface{})
 	if publicData {
 		secretData[secretID] = dek
-		return secretData, nil
+		return secretData, secrets.NoVersion, nil
 	}
 
 	// Use the encryption key to unwrap the DEK and get the secret passphrase
 	encodedPassphrase, err := v.decrypt(key, string(dek))
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 	decodedPassphrase, err := base64.StdEncoding.DecodeString(encodedPassphrase)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 	if customData {
 		if err := json.Unmarshal(decodedPassphrase, &secretData); err != nil {
-			return nil, err
+			return nil, secrets.NoVersion, err
 		}
 	} else {
 		secretData[secretID] = string(decodedPassphrase)
 	}
-	return secretData, nil
+	return secretData, secrets.NoVersion, nil
 }
 
 func (v *vaultSecrets) PutSecret(
 	secretID string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
-) error {
+) (secrets.Version, error) {
 	var (
 		cipher string
 		dek    []byte
@@ -200,15 +200,15 @@ func (v *vaultSecrets) PutSecret(
 
 	key := v.encryptionSecret(keyContext)
 	if err := secrets.KeyContextChecks(keyContext, secretData); err != nil {
-		return err
+		return secrets.NoVersion, err
 	} else if publicData && len(secretData) > 0 {
 		publicDek, ok := secretData[secretID]
 		if !ok {
-			return secrets.ErrInvalidSecretData
+			return secrets.NoVersion, secrets.ErrInvalidSecretData
 		}
 		dek, ok = publicDek.([]byte)
 		if !ok {
-			return &secrets.ErrInvalidKeyContext{
+			return secrets.NoVersion, &secrets.ErrInvalidKeyContext{
 				Reason: "secret data when PublicSecretData flag is set should be of the type []byte",
 			}
 		}
@@ -218,7 +218,7 @@ func (v *vaultSecrets) PutSecret(
 		// with the input secretID and the returned dek
 		value, err := json.Marshal(secretData)
 		if err != nil {
-			return err
+			return secrets.NoVersion, err
 		}
 		encodedPassphrase := base64.StdEncoding.EncodeToString(value)
 		cipher, err = v.encrypt(key, encodedPassphrase)
@@ -230,9 +230,9 @@ func (v *vaultSecrets) PutSecret(
 		dek = []byte(cipher)
 	}
 	if err != nil {
-		return err
+		return secrets.NoVersion, err
 	}
-	return v.ps.Set(
+	return secrets.NoVersion, v.ps.Set(
 		v.persistentStorePath(key.Namespace, secretID),
 		dek,
 		nil,

@@ -3,6 +3,7 @@ package kvdb
 import (
 	"errors"
 	"path"
+	"strconv"
 
 	"github.com/libopenstorage/secrets"
 	kv "github.com/portworx/kvdb"
@@ -43,22 +44,26 @@ func (v *kvdbSecrets) String() string {
 func (v *kvdbSecrets) GetSecret(
 	secretId string,
 	keyContext map[string]string,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, secrets.Version, error) {
 	secretData := make(map[string]interface{})
-	_, err := v.client.GetVal(SecretKey+secretId, &secretData)
+	kvp, err := v.client.GetVal(SecretKey+secretId, &secretData)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
-	return secretData, nil
+
+	return secretData, secrets.Version(strconv.FormatUint(kvp.KVDBIndex, 10)), nil
 }
 
 func (v *kvdbSecrets) PutSecret(
 	secretId string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
-) error {
-	_, err := v.client.Put(SecretKey+secretId, &secretData, 0)
-	return err
+) (secrets.Version, error) {
+	kvp, err := v.client.Put(SecretKey+secretId, &secretData, 0)
+	if err != nil {
+		return secrets.NoVersion, err
+	}
+	return secrets.Version(strconv.FormatUint(kvp.KVDBIndex, 10)), nil
 }
 
 func (v *kvdbSecrets) DeleteSecret(

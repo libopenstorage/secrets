@@ -107,7 +107,7 @@ func (a *awsKmsSecrets) String() string {
 func (a *awsKmsSecrets) GetSecret(
 	secretId string,
 	keyContext map[string]string,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, secrets.Version, error) {
 	var (
 		cipherBlob, decodedCipherBlob []byte
 		secretData                    map[string]interface{}
@@ -116,20 +116,20 @@ func (a *awsKmsSecrets) GetSecret(
 	_, publicData := keyContext[secrets.PublicSecretData]
 
 	if exists, err := a.ps.Exists(secretId); err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	} else if !exists {
-		return nil, secrets.ErrInvalidSecretId
+		return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
 	}
 
 	cipherBlob, err := a.ps.GetPublic(secretId)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 
 	if publicData {
 		secretData := make(map[string]interface{})
 		secretData[secretId] = cipherBlob
-		return secretData, nil
+		return secretData, secrets.NoVersion, nil
 	}
 
 	// AWS KMS api requires the cipherBlob to be in base64 decoded format.
@@ -144,7 +144,7 @@ func (a *awsKmsSecrets) GetSecret(
 	}
 	output, err := a.client.Decrypt(input)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 
 	// filePersistenceStore does not support storing of secretData
@@ -156,42 +156,42 @@ func (a *awsKmsSecrets) GetSecret(
 	// secretId
 	secretData, err = a.ps.GetSecretData(secretId, output.Plaintext)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	} else if secretData != nil {
-		return secretData, nil
+		return secretData, secrets.NoVersion, nil
 	}
 
 return_plaintext:
 	secretData = make(map[string]interface{})
 	secretData[secretId] = string(output.Plaintext)
-	return secretData, nil
+	return secretData, secrets.NoVersion, nil
 }
 
 func (a *awsKmsSecrets) PutSecret(
 	secretId string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
-) error {
+) (secrets.Version, error) {
 
 	_, override := keyContext[secrets.OverwriteSecretDataInStore]
 	_, publicData := keyContext[secrets.PublicSecretData]
 
 	if publicData && len(secretData) == 0 {
-		return &secrets.ErrInvalidKeyContext{
+		return secrets.NoVersion, &secrets.ErrInvalidKeyContext{
 			Reason: "secret data needs to be provided when PublicSecretData flag is set",
 		}
 	} else if publicData && len(secretData) > 0 {
 		publicDek, ok := secretData[secretId]
 		if !ok {
-			return secrets.ErrInvalidSecretData
+			return secrets.NoVersion, secrets.ErrInvalidSecretData
 		}
 		dek, ok := publicDek.([]byte)
 		if !ok {
-			return &secrets.ErrInvalidKeyContext{
+			return secrets.NoVersion, &secrets.ErrInvalidKeyContext{
 				Reason: "secret data when PublicSecretData flag is set should be of the type []byte",
 			}
 		}
-		return a.ps.Set(
+		return secrets.NoVersion, a.ps.Set(
 			secretId,
 			dek, // only store the public cipher text in store
 			nil, // do not use the plain text to encrypt the secret data
@@ -209,10 +209,10 @@ func (a *awsKmsSecrets) PutSecret(
 
 	output, err := a.client.GenerateDataKey(input)
 	if err != nil {
-		return err
+		return secrets.NoVersion, err
 	}
 
-	return a.ps.Set(
+	return secrets.NoVersion, a.ps.Set(
 		secretId,
 		output.CiphertextBlob, // store the public cipher text in store
 		output.Plaintext,      // use the plain text to encrypt secret data if provided

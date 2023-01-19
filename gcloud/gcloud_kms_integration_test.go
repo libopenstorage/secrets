@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package gcloud
@@ -74,7 +75,7 @@ func (i *gcloudSecretTest) TestPutSecret(t *testing.T) error {
 	secretData[testSecretIdWithPassphrase] = i.testPassphrases[testSecretIdWithPassphrase]
 
 	// PutSecret with non-nil secretData and no key context
-	err := i.s.PutSecret(testSecretIdWithPassphrase, secretData, nil)
+	_, err := i.s.PutSecret(testSecretIdWithPassphrase, secretData, nil)
 	assert.Error(t, err, "Expected error on PutSecret")
 	errInvalidContext, ok := err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
@@ -84,23 +85,23 @@ func (i *gcloudSecretTest) TestPutSecret(t *testing.T) error {
 	keyContext[secrets.CustomSecretData] = "true"
 
 	// PutSecret with nil secretData and key context
-	err = i.s.PutSecret(testSecretIdWithPassphrase, nil, keyContext)
+	_, err = i.s.PutSecret(testSecretIdWithPassphrase, nil, keyContext)
 	errInvalidContext, ok = err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
 	assert.Contains(t, errInvalidContext.Error(), "secret data needs to be provided", "Unexpected error on PutSecret")
 
 	// Successful PutSecret with custom secret data
-	err = i.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
+	_, err = i.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 	i.testSecretIds = append(i.testSecretIds, testSecretIdWithPassphrase)
 
 	// PutSecret with nil secretData
-	err = i.s.PutSecret(testSecretId, nil, nil)
+	_, err = i.s.PutSecret(testSecretId, nil, nil)
 	assert.Error(t, secrets.ErrEmptySecretData, err.Error(), "Unexpected error on PutSecret")
 
 	// Both CustomSecretData and PublicSecretData cannot be set
 	keyContext[secrets.PublicSecretData] = "true"
-	err = i.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
+	_, err = i.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
 	errInvalidContext, ok = err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
 	assert.Contains(t, errInvalidContext.Error(), "both", "Unexpected error on PutSecret")
@@ -108,7 +109,7 @@ func (i *gcloudSecretTest) TestPutSecret(t *testing.T) error {
 	delete(keyContext, secrets.CustomSecretData)
 
 	// PublicSecretData with no data
-	err = i.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
+	_, err = i.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
 	errInvalidContext, ok = err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
 	assert.Contains(t, errInvalidContext.Error(), "secret data needs to be provided", "Unexpected error on PutSecret")
@@ -116,11 +117,11 @@ func (i *gcloudSecretTest) TestPutSecret(t *testing.T) error {
 	// Successful PutSecret with PublicSecretData
 	getKC := make(map[string]string)
 	getKC[secrets.PublicSecretData] = "true"
-	secretData, err = i.s.GetSecret(testSecretIdWithPassphrase, getKC)
+	secretData, _, err = i.s.GetSecret(testSecretIdWithPassphrase, getKC)
 	dek := secretData[testSecretIdWithPassphrase]
 	putSecretData := make(map[string]interface{})
 	putSecretData[testSecretIdWithPublic] = dek
-	err = i.s.PutSecret(testSecretIdWithPublic, putSecretData, keyContext)
+	_, err = i.s.PutSecret(testSecretIdWithPublic, putSecretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 	i.testSecretIds = append(i.testSecretIds, testSecretIdWithPublic)
 
@@ -153,7 +154,7 @@ func (i *gcloudSecretTest) TestPutEqualTextSecrets(t *testing.T) {
 	i.testPassphrases[testSecretIdWithRSASizePassphrase] = randSeq(limit - len(emptySecretData))
 
 	secretData[testSecretIdWithRSASizePassphrase] = i.testPassphrases[testSecretIdWithRSASizePassphrase]
-	err = i.s.PutSecret(testSecretIdWithRSASizePassphrase, secretData, keyContext)
+	_, err = i.s.PutSecret(testSecretIdWithRSASizePassphrase, secretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutEqualTextSecrets")
 	i.testSecretIds = append(i.testSecretIds, testSecretIdWithRSASizePassphrase)
 }
@@ -167,7 +168,7 @@ func (i *gcloudSecretTest) TestPutLargeTextSecrets(t *testing.T) {
 	// Put Secret with large secret data text
 	i.testPassphrases[testSecretIdWithLargePassphrase] = randSeq(2000)
 	secretData[testSecretIdWithLargePassphrase] = i.testPassphrases[testSecretIdWithLargePassphrase]
-	err := i.s.PutSecret(testSecretIdWithLargePassphrase, secretData, keyContext)
+	_, err := i.s.PutSecret(testSecretIdWithLargePassphrase, secretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutLargeTextSecrets")
 	i.testSecretIds = append(i.testSecretIds, testSecretIdWithLargePassphrase)
 }
@@ -188,21 +189,21 @@ func (i *gcloudSecretTest) TestPutSecretBackwardCompatible(t *testing.T) {
 
 func (i *gcloudSecretTest) TestGetSecret(t *testing.T) error {
 	// GetSecret with non-existant id
-	_, err := i.s.GetSecret("dummy", nil)
+	_, _, err := i.s.GetSecret("dummy", nil)
 	assert.Error(t, err, "Expected GetSecret to fail")
 
 	// GetSecret using a secretId with data for custom data
 	i.TestGetCustomSecrets(t)
 
 	// GetSecret using a secretId without data
-	_, err = i.s.GetSecret(testSecretId, nil)
+	_, _, err = i.s.GetSecret(testSecretId, nil)
 	assert.Error(t, secrets.ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret")
 
 	keyContext := make(map[string]string)
 	// Both the flags are set
 	keyContext[secrets.CustomSecretData] = "true"
 	keyContext[secrets.PublicSecretData] = "true"
-	_, err = i.s.GetSecret(testSecretIdWithPublic, keyContext)
+	_, _, err = i.s.GetSecret(testSecretIdWithPublic, keyContext)
 	errInvalidContext, ok := err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
 	assert.Contains(t, errInvalidContext.Error(), "both", "Unexpected error on PutSecret")
@@ -211,12 +212,12 @@ func (i *gcloudSecretTest) TestGetSecret(t *testing.T) error {
 	delete(keyContext, secrets.CustomSecretData)
 
 	// deks for both secrets should match
-	sec1, err := i.s.GetSecret(testSecretIdWithPassphrase, keyContext)
+	sec1, _, err := i.s.GetSecret(testSecretIdWithPassphrase, keyContext)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
 	dek1, ok := sec1[testSecretIdWithPassphrase]
 	assert.True(t, ok, "Unexpected secret returned")
 
-	sec2, err := i.s.GetSecret(testSecretIdWithPublic, keyContext)
+	sec2, _, err := i.s.GetSecret(testSecretIdWithPublic, keyContext)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
 	dek2, ok := sec2[testSecretIdWithPublic]
 	assert.True(t, ok, "Unexpected secret returned")
@@ -237,7 +238,7 @@ func (i *gcloudSecretTest) TestGetCustomSecrets(t *testing.T) {
 			continue
 		}
 
-		plaintext, err := i.s.GetSecret(secretId, keyContext)
+		plaintext, _, err := i.s.GetSecret(secretId, keyContext)
 		assert.NoError(t, err, "Unexpected error on GetSecret")
 		// We have got secretData
 		assert.NotNil(t, plaintext, "Invalid plainText was returned")
@@ -265,7 +266,7 @@ func (i *gcloudSecretTest) TestDeleteSecret(t *testing.T) error {
 		assert.NoError(t, err, "Unexpected error on DeleteSecret")
 
 		// Get of a deleted key should fail
-		_, err = i.s.GetSecret(secretId, nil)
+		_, _, err = i.s.GetSecret(secretId, nil)
 		assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Expected an error on GetSecret after the key is deleted")
 	}
 

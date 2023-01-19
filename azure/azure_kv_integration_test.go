@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package azure
@@ -39,7 +40,7 @@ func NewAzureKVSecretTest(secretConfig map[string]interface{}) (test.SecretTest,
 func (a *azureSecretsTest) TestPutSecret(t *testing.T) error {
 	secretData := make(map[string]interface{})
 	// PutSecret should be successfull
-	err := a.s.PutSecret(testkey, secretData, nil)
+	_, err := a.s.PutSecret(testkey, secretData, nil)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "Secret data cannot be empty", "Unexpected error on PutSecret")
 
@@ -48,17 +49,17 @@ func (a *azureSecretsTest) TestPutSecret(t *testing.T) error {
 	secretData["testzone"] = "azure--dummy"
 
 	// PutSecret should be successfull
-	err = a.s.PutSecret(testkey, secretData, nil)
+	_, err = a.s.PutSecret(testkey, secretData, nil)
 	assert.Nil(t, err)
 
 	// Since azure allow to set multiple version of same secrets
 	// make sure you are getting same secret ID after resetting
 
 	secretData[testkey] = testsecret
-	err = a.s.PutSecret(testkey, secretData, nil)
+	_, err = a.s.PutSecret(testkey, secretData, nil)
 	assert.Nil(t, err)
 
-	resp, err := a.s.GetSecret(testkey, nil)
+	resp, _, err := a.s.GetSecret(testkey, nil)
 	assert.Nil(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, resp["testcred"].(string), "test-cred")
@@ -68,7 +69,7 @@ func (a *azureSecretsTest) TestPutSecret(t *testing.T) error {
 	assert.Nil(t, err)
 
 	// try to get secret again, should return err
-	resp, err = a.s.GetSecret(testkey, nil)
+	resp, _, err = a.s.GetSecret(testkey, nil)
 	assert.Error(t, err, "Expected secret to fail for non-existant key")
 
 	return nil
@@ -76,10 +77,10 @@ func (a *azureSecretsTest) TestPutSecret(t *testing.T) error {
 
 func (a *azureSecretsTest) TestGetSecret(t *testing.T) error {
 	// GetSecret with non-existant id
-	_, err := a.s.GetSecret("dummy", nil)
+	_, _, err := a.s.GetSecret("dummy", nil)
 	assert.Error(t, err, "Expected GetSecret to fail")
 
-	_, err = a.s.GetSecret("", nil)
+	_, _, err = a.s.GetSecret("", nil)
 	assert.Error(t, err, "Secret Name/ID cannot be empty")
 
 	secretData := make(map[string]interface{})
@@ -87,10 +88,10 @@ func (a *azureSecretsTest) TestGetSecret(t *testing.T) error {
 	secretData["testval"] = 10
 	secretData["testzone"] = "azure--dummy"
 
-	err = a.s.PutSecret(testkey, secretData, nil)
+	_, err = a.s.PutSecret(testkey, secretData, nil)
 	assert.Nil(t, err)
 
-	resp, err := a.s.GetSecret(testkey, nil)
+	resp, _, err := a.s.GetSecret(testkey, nil)
 	assert.Nil(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, resp["testzone"].(string), "azure--dummy")

@@ -89,12 +89,12 @@ func New(
 func (az *azureSecrets) GetSecret(
 	secretID string,
 	keyContext map[string]string,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, secrets.Version, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	if secretID == "" {
-		return nil, secrets.ErrEmptySecretId
+		return nil, secrets.NoVersion, secrets.ErrEmptySecretId
 	}
 
 	t := func() (interface{}, bool, error) {
@@ -106,12 +106,12 @@ func (az *azureSecrets) GetSecret(
 	}
 	resp, err := task.DoRetryWithTimeout(t, timeout, retryTimeout)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 
 	secretResp, ok := resp.(keyvault.SecretBundle)
 	if !ok || secretResp.Value == nil {
-		return nil, ErrInvalidSecretResp
+		return nil, secrets.NoVersion, ErrInvalidSecretResp
 	}
 	secretData := make(map[string]interface{})
 	err = json.Unmarshal([]byte(*secretResp.Value), &secretData)
@@ -120,28 +120,30 @@ func (az *azureSecrets) GetSecret(
 		secretData[secretID] = *secretResp.Value
 	}
 
-	return secretData, nil
+	// TODO: Azure does not support version numbers, but we could leverage LastUpdateTime as an indicator
+	// for changes in azure secret version if there is a need.
+	return secretData, secrets.NoVersion, nil
 }
 
 func (az *azureSecrets) PutSecret(
 	secretName string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
-) error {
+) (secrets.Version, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	var secretResp keyvault.SecretBundle
 	if secretName == "" {
-		return secrets.ErrEmptySecretId
+		return secrets.NoVersion, secrets.ErrEmptySecretId
 	}
 	if len(secretData) == 0 {
-		return secrets.ErrEmptySecretData
+		return secrets.NoVersion, secrets.ErrEmptySecretData
 	}
 
 	value, err := json.Marshal(secretData)
 	if err != nil {
-		return err
+		return secrets.NoVersion, err
 	}
 
 	t := func() (interface{}, bool, error) {
@@ -155,7 +157,7 @@ func (az *azureSecrets) PutSecret(
 	}
 	_, err = task.DoRetryWithTimeout(t, timeout, retryTimeout)
 
-	return err
+	return secrets.NoVersion, err
 }
 func (az *azureSecrets) DeleteSecret(
 	secretName string,

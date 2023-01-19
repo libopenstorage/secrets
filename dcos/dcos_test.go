@@ -62,7 +62,7 @@ func TestGetSecretWhenClientReturnsError(t *testing.T) {
 		Return(nil, fmt.Errorf("Get secret error")).
 		Times(1)
 
-	_, err := s.GetSecret(secretPath, nil)
+	_, _, err := s.GetSecret(secretPath, nil)
 
 	assert.NotNil(t, err)
 	assert.Equal(t, "Get secret error", err.Error())
@@ -78,7 +78,7 @@ func TestGetSecretWithEmptySecret(t *testing.T) {
 		Return(nil, nil).
 		Times(1)
 
-	_, err := s.GetSecret(secretPath, nil)
+	_, _, err := s.GetSecret(secretPath, nil)
 
 	assert.NotNil(t, err)
 	assert.Equal(t, secrets.ErrInvalidSecretId, err)
@@ -98,7 +98,7 @@ func TestGetSecretWithStringData(t *testing.T) {
 		Return(secret, nil).
 		Times(1)
 
-	secretData, err := s.GetSecret(secretPath, nil)
+	secretData, _, err := s.GetSecret(secretPath, nil)
 
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(secretData))
@@ -111,7 +111,7 @@ func TestGetSecretWithStringData(t *testing.T) {
 		Return(secret, nil).
 		Times(1)
 
-	secretData, err = s.GetSecret(secretPath, keyContext)
+	secretData, _, err = s.GetSecret(secretPath, keyContext)
 
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(secretData))
@@ -132,7 +132,7 @@ func TestGetSecretWithJSONData(t *testing.T) {
 		Return(secret, nil).
 		Times(1)
 
-	secretData, err := s.GetSecret(secretPath, nil)
+	secretData, _, err := s.GetSecret(secretPath, nil)
 
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(secretData))
@@ -146,7 +146,7 @@ func TestGetSecretWithJSONData(t *testing.T) {
 		Return(secret, nil).
 		Times(1)
 
-	secretData, err = s.GetSecret(secretPath, keyContext)
+	secretData, _, err = s.GetSecret(secretPath, keyContext)
 
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(secretData))
@@ -177,7 +177,7 @@ func TestGetSecretWhenTokenExpires(t *testing.T) {
 			Times(1),
 	)
 
-	secretData, err := s.GetSecret(secretPath, nil)
+	secretData, _, err := s.GetSecret(secretPath, nil)
 
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(secretData))
@@ -195,7 +195,7 @@ func TestGetSecretWhenTokenExpires(t *testing.T) {
 			Times(1),
 	)
 
-	secretData, err = s.GetSecret(secretPath, nil)
+	secretData, _, err = s.GetSecret(secretPath, nil)
 
 	assert.NotNil(t, err)
 	assert.Equal(t, "401 Unauthorized", err.Error())
@@ -205,12 +205,12 @@ func TestPutSecretWithEmptyData(t *testing.T) {
 	mockClient := getMockDCOSSecretsClient(t)
 	s := getMockDCOSSecrets(mockClient)
 
-	err := s.PutSecret("path/to/secret", nil, nil)
+	_, err := s.PutSecret("path/to/secret", nil, nil)
 
 	assert.NotNil(t, err)
 	assert.Equal(t, secrets.ErrEmptySecretData, err)
 
-	err = s.PutSecret("path/to/secret", make(map[string]interface{}), nil)
+	_, err = s.PutSecret("path/to/secret", make(map[string]interface{}), nil)
 
 	assert.NotNil(t, err)
 	assert.Equal(t, secrets.ErrEmptySecretData, err)
@@ -231,7 +231,7 @@ func TestPutSecretWhenClientReturnsError(t *testing.T) {
 		Times(1)
 
 	keyContext := map[string]string{KeySecretStore: "store"}
-	err := s.PutSecret("path/to/secret", data, keyContext)
+	_, err := s.PutSecret("path/to/secret", data, keyContext)
 
 	assert.NotNil(t, err)
 	assert.Equal(t, "Put secret error", err.Error())
@@ -254,7 +254,7 @@ func TestPutSecretWithValidData(t *testing.T) {
 		Times(1)
 
 	keyContext := map[string]string{KeySecretStore: "store"}
-	err := s.PutSecret("path/to/secret", data, keyContext)
+	_, err := s.PutSecret("path/to/secret", data, keyContext)
 
 	assert.Nil(t, err)
 }
@@ -290,7 +290,7 @@ func TestPutSecretWhenTokenExpires(t *testing.T) {
 	)
 
 	keyContext := map[string]string{KeySecretStore: "store"}
-	err := s.PutSecret("path/to/secret", data, keyContext)
+	_, err := s.PutSecret("path/to/secret", data, keyContext)
 
 	assert.Nil(t, err)
 
@@ -314,7 +314,7 @@ func TestPutSecretWhenTokenExpires(t *testing.T) {
 			Times(1),
 	)
 
-	err = s.PutSecret("path/to/secret", data, keyContext)
+	_, err = s.PutSecret("path/to/secret", data, keyContext)
 
 	assert.NotNil(t, err)
 	assert.Equal(t, "401 Unauthorized", err.Error())
