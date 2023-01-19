@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package k8s
@@ -53,26 +54,26 @@ func (k *k8sSecretTest) TestPutSecret(t *testing.T) error {
 	k.passphrase = uuid.New()
 	secretData[secretId] = k.passphrase
 	// PutSecret with non-nil secretData and no namespace should fail
-	err := k.s.PutSecret(secretName, secretData, nil)
+	_, err := k.s.PutSecret(secretName, secretData, nil)
 	assert.Error(t, err, "Expected an error on PutSecret")
 
 	keyContext := make(map[string]string)
 	keyContext[SecretNamespace] = "default"
 	// PutSecret with already existing secretId
-	err = k.s.PutSecret(secretName, secretData, keyContext)
+	_, err = k.s.PutSecret(secretName, secretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 	return nil
 }
 
 func (k *k8sSecretTest) TestGetSecret(t *testing.T) error {
-	secretData, err := k.s.GetSecret(secretName, nil)
+	secretData, _, err := k.s.GetSecret(secretName, nil)
 	assert.Error(t, err, "Expected an error when no namespace is provided")
 	assert.Nil(t, secretData, "Expected empty secret data")
 
 	keyContext := make(map[string]string)
 	keyContext[SecretNamespace] = "default"
 
-	plainText1, err := k.s.GetSecret(secretName, keyContext)
+	plainText1, _, err := k.s.GetSecret(secretName, keyContext)
 	assert.NoError(t, err, "Expected no error on GetSecret")
 	// We have got secretData
 	assert.NotNil(t, plainText1, "Invalid plainText was returned")
@@ -97,7 +98,7 @@ func (k *k8sSecretTest) TestDeleteSecret(t *testing.T) error {
 
 	// Get of a deleted secret should fail. Sleeping for the delete to finish
 	time.Sleep(2 * time.Second)
-	_, err = k.s.GetSecret(secretName, keyContext)
+	_, _, err = k.s.GetSecret(secretName, keyContext)
 	assert.Error(t, err, "Expected error on GetSecret")
 	return nil
 }

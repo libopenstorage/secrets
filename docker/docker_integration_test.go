@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package docker
@@ -45,7 +46,7 @@ func (d *dockerSecretTest) TestGetSecret(t *testing.T) error {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	secretData, err := d.s.GetSecret(secretId, nil)
+	secretData, _, err := d.s.GetSecret(secretId, nil)
 	if err != nil {
 		t.Errorf("Unexpected error in GetSecret: %v", err)
 	}

@@ -65,6 +65,14 @@ const (
 	DestroySecret = "destroy-all-secret-versions"
 )
 
+// Version represents the unique identifier associated with the version of the new secret.
+type Version string
+
+const (
+	// NoVersion indicates that the provider does not support versions for secrets
+	NoVersion Version = "noversion"
+)
+
 // Secrets interface implemented by backend Key Management Systems (KMS)
 type Secrets interface {
 	// String representation of the backend KMS
@@ -77,7 +85,7 @@ type Secrets interface {
 	GetSecret(
 		secretId string,
 		keyContext map[string]string,
-	) (map[string]interface{}, error)
+	) (map[string]interface{}, Version, error)
 
 	// PutSecret will associate an secretId to its secret data
 	// provided in the arguments and store it into the secret backend
@@ -87,7 +95,7 @@ type Secrets interface {
 		secretId string,
 		plainText map[string]interface{},
 		keyContext map[string]string,
-	) error
+	) (Version, error)
 
 	// DeleteSecret deletes the secret data associated with the
 	// supplied secretId.

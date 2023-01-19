@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package vaulttransit
@@ -82,7 +83,7 @@ func (v *vaultTransitSecretTest) TestPutSecret(t *testing.T) error {
 	secretData[testSecretIdWithPassphrase] = v.passphrase
 
 	// PutSecret with non-nil secretData and no key context
-	err := v.s.PutSecret(testSecretIdWithPassphrase, secretData, nil)
+	_, err := v.s.PutSecret(testSecretIdWithPassphrase, secretData, nil)
 	assert.Error(t, err, "Expected error on PutSecret")
 	errInvalidContext, ok := err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
@@ -92,24 +93,24 @@ func (v *vaultTransitSecretTest) TestPutSecret(t *testing.T) error {
 	keyContext[secrets.CustomSecretData] = "true"
 
 	// PutSecret with nil secretData and key context
-	err = v.s.PutSecret(testSecretIdWithPassphrase, nil, keyContext)
+	_, err = v.s.PutSecret(testSecretIdWithPassphrase, nil, keyContext)
 	errInvalidContext, ok = err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
 	assert.Contains(t, errInvalidContext.Error(), "secret data needs to be provided", "Unexpected error on PutSecret")
 
 	// Successful PutSecret with custom secret data
-	err = v.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
+	_, err = v.s.PutSecret(testSecretIdWithPassphrase, secretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 	v.totalPuts++
 
 	// PutSecret with nil secretData
-	err = v.s.PutSecret(testSecretId, nil, nil)
+	_, err = v.s.PutSecret(testSecretId, nil, nil)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 	v.totalPuts++
 
 	// Both CustomSecretData and PublicSecretData cannot be set
 	keyContext[secrets.PublicSecretData] = "true"
-	err = v.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
+	_, err = v.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
 	errInvalidContext, ok = err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
 	assert.Contains(t, errInvalidContext.Error(), "both", "Unexpected error on PutSecret")
@@ -117,7 +118,7 @@ func (v *vaultTransitSecretTest) TestPutSecret(t *testing.T) error {
 	delete(keyContext, secrets.CustomSecretData)
 
 	// PublicSecretData with no data
-	err = v.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
+	_, err = v.s.PutSecret(testSecretIdWithPublic, nil, keyContext)
 	errInvalidContext, ok = err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
 	assert.Contains(t, errInvalidContext.Error(), "secret data needs to be provided", "Unexpected error on PutSecret")
@@ -125,12 +126,12 @@ func (v *vaultTransitSecretTest) TestPutSecret(t *testing.T) error {
 	// Successful PutSecret with PublicSecretData
 	getKC := make(map[string]string)
 	getKC[secrets.PublicSecretData] = "true"
-	secretData, err = v.s.GetSecret(testSecretId, getKC)
+	secretData, _, err = v.s.GetSecret(testSecretId, getKC)
 	assert.NoError(t, err, "Get %s secret", testSecretId)
 	dek := secretData[testSecretId]
 	putSecretData := make(map[string]interface{})
 	putSecretData[testSecretIdWithPublic] = dek
-	err = v.s.PutSecret(testSecretIdWithPublic, putSecretData, keyContext)
+	_, err = v.s.PutSecret(testSecretIdWithPublic, putSecretData, keyContext)
 	assert.NoError(t, err, "Unexpected error on PutSecret")
 	v.totalPuts++
 	return nil
@@ -138,13 +139,13 @@ func (v *vaultTransitSecretTest) TestPutSecret(t *testing.T) error {
 
 func (v *vaultTransitSecretTest) TestGetSecret(t *testing.T) error {
 	// GetSecret with non-existant id
-	_, err := v.s.GetSecret("dummy", nil)
+	_, _, err := v.s.GetSecret("dummy", nil)
 	assert.Error(t, err, "Expected GetSecret to fail")
 
 	// GetSecret using a secretId with data
 	keyContext := make(map[string]string)
 	keyContext[secrets.CustomSecretData] = "true"
-	plainText1, err := v.s.GetSecret(testSecretIdWithPassphrase, keyContext)
+	plainText1, _, err := v.s.GetSecret(testSecretIdWithPassphrase, keyContext)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
 	// We have got secretData
 	assert.NotNil(t, plainText1, "Invalid plainText was returned")
@@ -155,12 +156,12 @@ func (v *vaultTransitSecretTest) TestGetSecret(t *testing.T) error {
 	assert.Equal(t, str, v.passphrase, "Unexpected passphrase")
 
 	// GetSecret using a secretId without data
-	_, err = v.s.GetSecret(testSecretId, nil)
+	_, _, err = v.s.GetSecret(testSecretId, nil)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
 
 	// Both the flags are set
 	keyContext[secrets.PublicSecretData] = "true"
-	_, err = v.s.GetSecret(testSecretIdWithPublic, keyContext)
+	_, _, err = v.s.GetSecret(testSecretIdWithPublic, keyContext)
 	errInvalidContext, ok := err.(*secrets.ErrInvalidKeyContext)
 	assert.True(t, ok, "Unexpected error on PutSecret")
 	assert.Contains(t, errInvalidContext.Error(), "both", "Unexpected error on PutSecret")
@@ -169,12 +170,12 @@ func (v *vaultTransitSecretTest) TestGetSecret(t *testing.T) error {
 	delete(keyContext, secrets.CustomSecretData)
 
 	// deks for both secrets should match
-	sec1, err := v.s.GetSecret(testSecretId, keyContext)
+	sec1, _, err := v.s.GetSecret(testSecretId, keyContext)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
 	dek1, ok := sec1[testSecretId]
 	assert.True(t, ok, "Unexpected secret returned")
 
-	sec2, err := v.s.GetSecret(testSecretIdWithPublic, keyContext)
+	sec2, _, err := v.s.GetSecret(testSecretIdWithPublic, keyContext)
 	assert.NoError(t, err, "Unexpected error on GetSecret")
 	dek2, ok := sec2[testSecretIdWithPublic]
 	assert.True(t, ok, "Unexpected secret returned")
@@ -189,7 +190,7 @@ func (v *vaultTransitSecretTest) TestDeleteSecret(t *testing.T) error {
 	assert.NoError(t, err, "Unexpected error on DeleteSecret")
 
 	// Get of a deleted key should fail
-	_, err = v.s.GetSecret(testSecretId, nil)
+	_, _, err = v.s.GetSecret(testSecretId, nil)
 	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Expected an error on GetSecret after the key is deleted")
 
 	// Delete of a non-existent key should also succeed

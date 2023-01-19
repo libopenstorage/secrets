@@ -86,40 +86,43 @@ func (a *awsSecretsMgr) String() string {
 func (a *awsSecretsMgr) GetSecret(
 	secretId string,
 	keyContext map[string]string,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, secrets.Version, error) {
 	secretValueOutput, err := a.scm.GetSecretValue(&secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretId),
 	})
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == secretsmanager.ErrCodeResourceNotFoundException {
-				return nil, secrets.ErrInvalidSecretId
+				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
 			} else if aerr.Code() == secretsmanager.ErrCodeInvalidRequestException &&
 				strings.Contains(aerr.Error(), "marked for deletion") {
-				return nil, secrets.ErrInvalidSecretId
+				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
 			}
 		}
-		return nil, &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
+		return nil, secrets.NoVersion, &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
 	}
 	if secretValueOutput.SecretString == nil || len(*secretValueOutput.SecretString) <= 0 {
-		return nil, secrets.ErrEmptySecretData
+		return nil, secrets.NoVersion, secrets.ErrEmptySecretData
 	}
 	secretOut := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(*secretValueOutput.SecretString), &secretOut); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal secret data: %v", err)
+		return nil, secrets.NoVersion, fmt.Errorf("failed to unmarshal secret data: %v", err)
 	}
-	return secretOut, nil
+	if secretValueOutput.VersionId == nil {
+		return nil, secrets.NoVersion, fmt.Errorf("invalid version returned by aws")
+	}
+	return secretOut, secrets.Version(*secretValueOutput.VersionId), nil
 }
 
 func (a *awsSecretsMgr) PutSecret(
 	secretId string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
-) error {
+) (secrets.Version, error) {
 	// Marshal the secret data
 	secretBytes, err := json.Marshal(secretData)
 	if err != nil {
-		return fmt.Errorf("failed to marshal secret data: %v", err)
+		return secrets.NoVersion, fmt.Errorf("failed to marshal secret data: %v", err)
 	}
 	// Check if there already exists a key.
 	_, err = a.scm.GetSecretValue(&secretsmanager.GetSecretValueInput{
@@ -127,25 +130,37 @@ func (a *awsSecretsMgr) PutSecret(
 	})
 	if err == nil {
 		// Update the existing secret
-		_, err = a.scm.PutSecretValue(&secretsmanager.PutSecretValueInput{
+		secretValueOutput, putErr := a.scm.PutSecretValue(&secretsmanager.PutSecretValueInput{
 			SecretId:     aws.String(secretId),
 			SecretString: aws.String(string(secretBytes)),
 		})
+		if putErr != nil {
+			return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: putErr.Error(), Provider: Name}
+		}
+		if secretValueOutput.VersionId == nil {
+			return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: "invalid version returned by aws", Provider: Name}
+		}
+		return secrets.Version(*secretValueOutput.VersionId), nil
 	} else {
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == secretsmanager.ErrCodeResourceNotFoundException {
 				// Create a new secret
-				_, err = a.scm.CreateSecret(&secretsmanager.CreateSecretInput{
+				secretValueOutput, createErr := a.scm.CreateSecret(&secretsmanager.CreateSecretInput{
 					SecretString: aws.String(string(secretBytes)),
 					Name:         aws.String(secretId),
 				})
+				if createErr != nil {
+					return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: createErr.Error(), Provider: Name}
+				}
+				if secretValueOutput.VersionId == nil {
+					return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: "invalid version returned by aws", Provider: Name}
+				}
+				return secrets.Version(*secretValueOutput.VersionId), nil
 			} // return the aws error
 		} // return the non-aws error
 	}
-	if err != nil {
-		return &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
-	}
-	return nil
+	// Gets, Puts & Creates have failed
+	return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
 }
 
 func (a *awsSecretsMgr) DeleteSecret(
