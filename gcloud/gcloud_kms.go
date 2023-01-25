@@ -91,48 +91,48 @@ func (g *gcloudKmsSecrets) String() string {
 func (g *gcloudKmsSecrets) GetSecret(
 	secretId string,
 	keyContext map[string]string,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, secrets.Version, error) {
 
 	_, customData := keyContext[secrets.CustomSecretData]
 	_, publicData := keyContext[secrets.PublicSecretData]
 	if customData && publicData {
-		return nil, &secrets.ErrInvalidKeyContext{
+		return nil, secrets.NoVersion, &secrets.ErrInvalidKeyContext{
 			Reason: "both CustomSecretData and PublicSecretData flags cannot be set",
 		}
 	}
 
 	dek, err := g.getDekFromStore(secretId)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 
 	secretData := make(map[string]interface{})
 	if publicData {
 		secretData[secretId] = dek
-		return secretData, nil
+		return secretData, secrets.NoVersion, nil
 	}
 
 	// decrypt the dek (chunks of encrypted byte) due to the asymmetric key encryption limits
 	plaintext, err := decryptToPlaintext(g, dek)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 
 	if customData {
 		if err := json.Unmarshal(plaintext, &secretData); err != nil {
-			return nil, err
+			return nil, secrets.NoVersion, err
 		}
 	} else {
 		secretData[secretId] = string(plaintext)
 	}
-	return secretData, nil
+	return secretData, secrets.NoVersion, nil
 }
 
 func (g *gcloudKmsSecrets) PutSecret(
 	secretId string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
-) error {
+) (secrets.Version, error) {
 
 	var (
 		dek []byte
@@ -142,15 +142,15 @@ func (g *gcloudKmsSecrets) PutSecret(
 	_, publicData := keyContext[secrets.PublicSecretData]
 
 	if err := secrets.KeyContextChecks(keyContext, secretData); err != nil {
-		return err
+		return secrets.NoVersion, err
 	} else if publicData && len(secretData) > 0 {
 		publicDek, ok := secretData[secretId]
 		if !ok {
-			return secrets.ErrInvalidSecretData
+			return secrets.NoVersion, secrets.ErrInvalidSecretData
 		}
 		dek, ok = publicDek.([]byte)
 		if !ok {
-			return &secrets.ErrInvalidKeyContext{
+			return secrets.NoVersion, &secrets.ErrInvalidKeyContext{
 				Reason: "secret data when PublicSecretData flag is set should be of the type []byte",
 			}
 		}
@@ -159,11 +159,11 @@ func (g *gcloudKmsSecrets) PutSecret(
 		// with the input secretID and the returned dek
 		plainTextByte, err := json.Marshal(secretData)
 		if err != nil {
-			return err
+			return secrets.NoVersion, err
 		}
 		publicKey, err := g.getAsymmetricPublicKey()
 		if err != nil {
-			return err
+			return secrets.NoVersion, err
 		}
 		// encrypt the plain text
 		rsaKey := publicKey.(*rsa.PublicKey)
@@ -171,14 +171,14 @@ func (g *gcloudKmsSecrets) PutSecret(
 
 		// encrypt the plaintext by chunks to bypass the asymmetric key encryption limits
 		if dek, err = encryptPlaintextByChunks(plainTextByte, rsaKey, hash); err != nil {
-			return err
+			return secrets.NoVersion, err
 		}
 
 	} else {
-		return secrets.ErrEmptySecretData
+		return secrets.NoVersion, secrets.ErrEmptySecretData
 	}
 
-	return g.ps.Set(
+	return secrets.NoVersion, g.ps.Set(
 		secretId,
 		dek,
 		nil,

@@ -1,3 +1,4 @@
+//go:build ci
 // +build ci
 
 package vault
@@ -48,7 +49,7 @@ func (suite *VaultTestSuite) TestCRUD() {
 		// Build Secret
 		data := make(map[string]interface{})
 		data["foo"] = "bar"
-		err := v1.PutSecret("foo", data, nil)
+		_, err := v1.PutSecret("foo", data, nil)
 		assert.NoError(suite.T(), err)
 	})
 
@@ -64,7 +65,7 @@ func (suite *VaultTestSuite) TestCRUD() {
 		// Build Secret
 		data := make(map[string]interface{})
 		data["foo"] = "bar"
-		err := v2.PutSecret("foo", data, nil)
+		_, err := v2.PutSecret("foo", data, nil)
 		assert.NoError(suite.T(), err)
 	})
 

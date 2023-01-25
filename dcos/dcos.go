@@ -114,24 +114,24 @@ func (d *dcosSecrets) String() string {
 func (d *dcosSecrets) GetSecret(
 	secretPath string,
 	keyContext map[string]string,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, secrets.Version, error) {
 	secret, err := d.client.GetSecret(keyContext[KeySecretStore], secretPath)
 	if isTokenExpired(err) {
 		client, err := newClient(nil)
 		if err != nil {
-			return nil, err
+			return nil, secrets.NoVersion, err
 		}
 		d.client = client
 		secret, err = d.client.GetSecret(keyContext[KeySecretStore], secretPath)
 		if err != nil {
-			return nil, err
+			return nil, secrets.NoVersion, err
 		}
 	} else if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 
 	if secret == nil {
-		return nil, secrets.ErrInvalidSecretId
+		return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
 	}
 
 	var result map[string]interface{}
@@ -141,21 +141,21 @@ func (d *dcosSecrets) GetSecret(
 		result = make(map[string]interface{})
 		result[secretPath] = secret.Value
 	}
-	return result, nil
+	return result, secrets.NoVersion, nil
 }
 
 func (d *dcosSecrets) PutSecret(
 	secretPath string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
-) error {
+) (secrets.Version, error) {
 	if len(secretData) == 0 {
-		return secrets.ErrEmptySecretData
+		return secrets.NoVersion, secrets.ErrEmptySecretData
 	}
 
 	value, err := json.Marshal(secretData)
 	if err != nil {
-		return err
+		return secrets.NoVersion, err
 	}
 
 	secret := &api.Secret{
@@ -165,12 +165,12 @@ func (d *dcosSecrets) PutSecret(
 	if isTokenExpired(err) {
 		client, err := newClient(nil)
 		if err != nil {
-			return err
+			return secrets.NoVersion, err
 		}
 		d.client = client
-		return d.client.CreateOrUpdateSecret(keyContext[KeySecretStore], secretPath, secret)
+		return secrets.NoVersion, d.client.CreateOrUpdateSecret(keyContext[KeySecretStore], secretPath, secret)
 	}
-	return err
+	return secrets.NoVersion, err
 }
 
 func (d *dcosSecrets) DeleteSecret(

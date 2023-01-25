@@ -123,25 +123,25 @@ func (i *ibmKPSecret) String() string {
 func (i *ibmKPSecret) GetSecret(
 	secretId string,
 	keyContext map[string]string,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, secrets.Version, error) {
 
 	_, customData := keyContext[secrets.CustomSecretData]
 	_, publicData := keyContext[secrets.PublicSecretData]
 	if customData && publicData {
-		return nil, &secrets.ErrInvalidKeyContext{
+		return nil, secrets.NoVersion, &secrets.ErrInvalidKeyContext{
 			Reason: "both CustomSecretData and PublicSecretData flags cannot be set",
 		}
 	}
 
 	dek, err := i.getDekFromStore(secretId)
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 
 	secretData := make(map[string]interface{})
 	if publicData {
 		secretData[secretId] = dek
-		return secretData, nil
+		return secretData, secrets.NoVersion, nil
 	}
 
 	// Use the CRK to unwrap the DEK and get the secret passphrase
@@ -152,27 +152,27 @@ func (i *ibmKPSecret) GetSecret(
 		nil,
 	)
 	if err != nil {
-		return nil, handleError(err)
+		return nil, secrets.NoVersion, handleError(err)
 	}
 	decodedPassphrase, err := base64.StdEncoding.DecodeString(string(encodedPassphrase))
 	if err != nil {
-		return nil, err
+		return nil, secrets.NoVersion, err
 	}
 	if customData {
 		if err := json.Unmarshal(decodedPassphrase, &secretData); err != nil {
-			return nil, err
+			return nil, secrets.NoVersion, err
 		}
 	} else {
 		secretData[secretId] = string(decodedPassphrase)
 	}
-	return secretData, nil
+	return secretData, secrets.NoVersion, nil
 }
 
 func (i *ibmKPSecret) PutSecret(
 	secretId string,
 	secretData map[string]interface{},
 	keyContext map[string]string,
-) error {
+) (secrets.Version, error) {
 	var (
 		dek []byte
 		err error
@@ -183,15 +183,15 @@ func (i *ibmKPSecret) PutSecret(
 	_, publicData := keyContext[secrets.PublicSecretData]
 
 	if err := secrets.KeyContextChecks(keyContext, secretData); err != nil {
-		return err
+		return secrets.NoVersion, err
 	} else if publicData && len(secretData) > 0 {
 		publicDek, ok := secretData[secretId]
 		if !ok {
-			return secrets.ErrInvalidSecretData
+			return secrets.NoVersion, secrets.ErrInvalidSecretData
 		}
 		dek, ok = publicDek.([]byte)
 		if !ok {
-			return &secrets.ErrInvalidKeyContext{
+			return secrets.NoVersion, &secrets.ErrInvalidKeyContext{
 				Reason: "secret data when PublicSecretData flag is set should be of the type []byte",
 			}
 		}
@@ -201,7 +201,7 @@ func (i *ibmKPSecret) PutSecret(
 		// with the input secretID and the returned dek
 		value, err := json.Marshal(secretData)
 		if err != nil {
-			return err
+			return secrets.NoVersion, err
 		}
 		encodedPassphrase := base64.StdEncoding.EncodeToString(value)
 		dek, err = i.kp.Wrap(
@@ -220,9 +220,9 @@ func (i *ibmKPSecret) PutSecret(
 		)
 	}
 	if err != nil {
-		return handleError(err)
+		return secrets.NoVersion, handleError(err)
 	}
-	return i.ps.Set(
+	return secrets.NoVersion, i.ps.Set(
 		secretId,
 		dek,
 		nil,

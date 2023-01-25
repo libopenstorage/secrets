@@ -32,10 +32,12 @@ func TestAll(t *testing.T) {
 }
 
 type awsSecretTest struct {
-	s                   secrets.Secrets
-	totalPuts           int
-	secretIdWithData    string
-	secretIdWithoutData string
+	s                          secrets.Secrets
+	totalPuts                  int
+	secretIdWithData           string
+	secretIdWithoutData        string
+	secretIdWithDataVersion    secrets.Version
+	secretIdWithoutDataVersion secrets.Version
 }
 
 func NewAwsSecretTest(secretConfig map[string]interface{}) (test.SecretTest, error) {
@@ -56,13 +58,18 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 	secretData["key1"] = "value1"
 	secretData["key2"] = "value2"
 	// PutSecret with non-nil secretData
-	err := a.s.PutSecret(a.secretIdWithData, secretData, nil)
-	assert.NoError(t, err, "Unepxected error on PutSecret")
+	version, err := a.s.PutSecret(a.secretIdWithData, secretData, nil)
+	assert.NoError(t, err, "Unexpected error on PutSecret")
+	assert.NotEmptyf(t, string(version), "expected non-empty version")
 	a.totalPuts++
+	a.secretIdWithDataVersion = version
 
 	// PutSecret with nil secretData
-	err = a.s.PutSecret(a.secretIdWithoutData, nil, nil)
+	version, err = a.s.PutSecret(a.secretIdWithoutData, nil, nil)
 	assert.NoError(t, err, "Expected PutSecret to succeed. Failed with error: %v", err)
+	assert.NotEmptyf(t, string(version), "expected non-empty version")
+	a.secretIdWithoutDataVersion = version
+
 	a.totalPuts++
 
 	return nil
@@ -70,13 +77,15 @@ func (a *awsSecretTest) TestPutSecret(t *testing.T) error {
 
 func (a *awsSecretTest) TestGetSecret(t *testing.T) error {
 	// GetSecret with non-existant id
-	_, err := a.s.GetSecret("dummy", nil)
+	_, version, err := a.s.GetSecret("dummy", nil)
 	assert.Error(t, err, "Expected GetSecret to fail")
+	assert.Equal(t, version, secrets.NoVersion)
 
 	// GetSecret using a secretId with data
-	plainText1, err := a.s.GetSecret(a.secretIdWithData, nil)
+	plainText1, version, err := a.s.GetSecret(a.secretIdWithData, nil)
 	assert.NoError(t, err, "Expected GetSecret to succeed")
 	assert.NotNil(t, plainText1, "Expected plainText to not be nil")
+	assert.Equal(t, a.secretIdWithDataVersion, version)
 	v, ok := plainText1["key1"]
 	assert.True(t, ok, "Unexpected secretData")
 	str, ok := v.(string)
@@ -84,8 +93,9 @@ func (a *awsSecretTest) TestGetSecret(t *testing.T) error {
 	assert.Equal(t, str, "value1", "Unexpected secretData")
 
 	// GetSecret using a secretId without data
-	_, err = a.s.GetSecret(a.secretIdWithoutData, nil)
+	_, version, err = a.s.GetSecret(a.secretIdWithoutData, nil)
 	assert.NoError(t, err, "Expected GetSecret to succeed")
+	assert.Equal(t, a.secretIdWithoutDataVersion, version)
 
 	return nil
 }
@@ -101,16 +111,18 @@ func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
 
 	// Get of a deleted key should fail
-	_, err = a.s.GetSecret(a.secretIdWithData, nil)
+	_, version, err := a.s.GetSecret(a.secretIdWithData, nil)
 	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret after delete")
+	assert.Equal(t, version, secrets.NoVersion)
 
 	// Delete of a key that exists should succeed
 	err = a.s.DeleteSecret(a.secretIdWithoutData, nil)
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
 
 	// GetSecret using a secretId without data
-	_, err = a.s.GetSecret(a.secretIdWithoutData, nil)
+	_, version, err = a.s.GetSecret(a.secretIdWithoutData, nil)
 	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret after delete")
+	assert.Equal(t, version, secrets.NoVersion)
 
 	// Delete of a non-existent key should also succeed
 	err = a.s.DeleteSecret("dummy", nil)
