@@ -1,4 +1,4 @@
-package store
+package secrets
 
 import "context"
 
@@ -7,12 +7,13 @@ type SecretKey struct {
 	Name   string
 }
 
-type Reader interface {
+type SecretReader interface {
+	String() string
 	Get(ctx context.Context, key SecretKey) (secret map[string]any, err error)
 }
 
-type Store interface {
-	Reader
+type SecretStore interface {
+	SecretReader
 	Set(ctx context.Context, key SecretKey, secret map[string]any) error
 	Delete(ctx context.Context, key SecretKey) error
 }
