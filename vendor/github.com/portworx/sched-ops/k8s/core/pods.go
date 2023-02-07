@@ -24,6 +24,8 @@ type PodOps interface {
 	CreatePod(pod *corev1.Pod) (*corev1.Pod, error)
 	// UpdatePod updates the given pod
 	UpdatePod(pod *corev1.Pod) (*corev1.Pod, error)
+	// ListPods returns pods from all namespaces matching the given label
+	ListPods(map[string]string) (*corev1.PodList, error)
 	// GetPods returns pods for the given namespace
 	GetPods(string, map[string]string) (*corev1.PodList, error)
 	// GetPodsByNode returns all pods in given namespace and given k8s node name.
@@ -93,6 +95,17 @@ func (c *Client) UpdatePod(pod *corev1.Pod) (*corev1.Pod, error) {
 	return c.kubernetes.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{})
 }
 
+// ListPods returns pods from all namespaces matching the given label
+func (c *Client) ListPods(labelSelector map[string]string) (*corev1.PodList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	opts := metav1.ListOptions{
+		LabelSelector: mapToCSV(labelSelector),
+	}
+	return c.kubernetes.CoreV1().Pods("").List(context.TODO(), opts)
+}
+
 // GetPods returns pods for the given namespace
 func (c *Client) GetPods(namespace string, labelSelector map[string]string) (*corev1.PodList, error) {
 	return c.getPodsWithListOptions(namespace, metav1.ListOptions{
@@ -101,7 +114,7 @@ func (c *Client) GetPods(namespace string, labelSelector map[string]string) (*co
 }
 
 // GetPodsByNode returns all pods in given namespace and given k8s node name.
-//  If namespace is empty, it will return pods from all namespaces
+// If namespace is empty, it will return pods from all namespaces
 func (c *Client) GetPodsByNode(nodeName, namespace string) (*corev1.PodList, error) {
 	if len(nodeName) == 0 {
 		return nil, fmt.Errorf("node name is required for this API")
@@ -115,7 +128,7 @@ func (c *Client) GetPodsByNode(nodeName, namespace string) (*corev1.PodList, err
 }
 
 // GetPodsByNodeAndLabels returns all pods in given namespace and given k8s node name for the given labels
-//  If namespace is empty, it will return pods from all namespaces
+// If namespace is empty, it will return pods from all namespaces
 func (c *Client) GetPodsByNodeAndLabels(nodeName, namespace string, labels map[string]string) (*corev1.PodList, error) {
 	if len(nodeName) == 0 {
 		return nil, fmt.Errorf("node name is required for this API")
@@ -204,8 +217,16 @@ func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, op
 	for _, p := range pods.Items {
 		for _, v := range p.Spec.Volumes {
 			if v.PersistentVolumeClaim != nil && v.PersistentVolumeClaim.ClaimName == pvcName {
-				retList = append(retList, p)
-				break
+				// Along PVC present in the volume list, we also checking whether any of the container in the
+				// pod is really using it by mount them.
+				for _, container := range p.Spec.Containers {
+					for _, mount := range container.VolumeMounts {
+						if mount.Name == v.Name {
+							retList = append(retList, p)
+							break
+						}
+					}
+				}
 			}
 		}
 	}
@@ -333,12 +354,8 @@ func (c *Client) IsPodReady(pod corev1.Pod) bool {
 
 // IsPodBeingManaged returns true if the pod is being managed by a controller
 func (c *Client) IsPodBeingManaged(pod corev1.Pod) bool {
-	if len(pod.OwnerReferences) == 0 {
-		return false
-	}
-
 	for _, owner := range pod.OwnerReferences {
-		if *owner.Controller {
+		if owner.Controller != nil && *owner.Controller {
 			// We are assuming that if a pod has a owner who has set itself as
 			// a controller, the pod is managed. We are not checking for specific
 			// contollers like ReplicaSet, StatefulSet as that is
@@ -348,7 +365,6 @@ func (c *Client) IsPodBeingManaged(pod corev1.Pod) bool {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -511,8 +527,8 @@ func (c *Client) GetPodLog(podName string, ns string, podLogOptions *corev1.PodL
 }
 
 // isAnyVolumeUsingVolumePlugin returns true if any of the given volumes is using a storage class for the given plugin
-//	In case errors are found while looking up a particular volume, the function ignores the errors as the goal is to
-//	find if there is any match or not
+// In case errors are found while looking up a particular volume, the function ignores the errors as the goal is to
+// find if there is any match or not
 func (c *Client) isAnyVolumeUsingVolumePlugin(volumes []corev1.Volume, volumeNamespace, plugin string) bool {
 	for _, v := range volumes {
 		if v.PersistentVolumeClaim != nil {
