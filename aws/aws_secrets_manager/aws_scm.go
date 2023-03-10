@@ -79,14 +79,16 @@ func (a *AWSSecretsMgr) String() string {
 	return Name
 }
 
-func (a *AWSSecretsMgr) Get(_ context.Context, key secrets.SecretKey) (secret map[string]any, err error) {
+func (a *AWSSecretsMgr) Get(_ context.Context, key secrets.SecretKey) (map[string]any, error) {
 	secretID := createSecretId(key)
-	return a.get(secretID)
+	secret, _, err := a.get(secretID)
+	return secret, err
 }
 
 func (a *AWSSecretsMgr) Set(_ context.Context, key secrets.SecretKey, secret map[string]any) error {
 	secretID := createSecretId(key)
-	return a.put(secretID, secret)
+	_, err := a.put(secretID, secret)
+	return err
 }
 
 func (a *AWSSecretsMgr) Delete(_ context.Context, key secrets.SecretKey) error {
@@ -97,7 +99,7 @@ func (a *AWSSecretsMgr) Delete(_ context.Context, key secrets.SecretKey) error {
 func (a *AWSSecretsMgr) GetSecret(
 	secretID string,
 	_ map[string]string,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, secrets.Version, error) {
 	return a.get(secretID)
 }
 
@@ -105,7 +107,7 @@ func (a *AWSSecretsMgr) PutSecret(
 	secretID string,
 	secretData map[string]interface{},
 	_ map[string]string,
-) error {
+) (secrets.Version, error) {
 	return a.put(secretID, secretData)
 }
 
