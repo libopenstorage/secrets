@@ -79,13 +79,13 @@ func (a *AWSSecretsMgr) String() string {
 	return Name
 }
 
-func (a *AWSSecretsMgr) Get(_ context.Context, key secrets.SecretKey) (map[string]any, error) {
+func (a *AWSSecretsMgr) Get(_ context.Context, key secrets.SecretKey) (map[string]interface{}, error) {
 	secretID := createSecretId(key)
 	secret, _, err := a.get(secretID)
 	return secret, err
 }
 
-func (a *AWSSecretsMgr) Set(_ context.Context, key secrets.SecretKey, secret map[string]any) error {
+func (a *AWSSecretsMgr) Set(_ context.Context, key secrets.SecretKey, secret map[string]interface{}) error {
 	secretID := createSecretId(key)
 	_, err := a.put(secretID, secret)
 	return err

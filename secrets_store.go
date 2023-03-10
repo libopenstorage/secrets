@@ -9,11 +9,11 @@ type SecretKey struct {
 
 type SecretReader interface {
 	String() string
-	Get(ctx context.Context, key SecretKey) (secret map[string]any, err error)
+	Get(ctx context.Context, key SecretKey) (secret map[string]interface{}, err error)
 }
 
 type SecretStore interface {
 	SecretReader
-	Set(ctx context.Context, key SecretKey, secret map[string]any) error
+	Set(ctx context.Context, key SecretKey, secret map[string]interface{}) error
 	Delete(ctx context.Context, key SecretKey) error
 }
