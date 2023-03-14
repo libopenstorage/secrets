@@ -296,4 +296,16 @@ func init() {
 	}); err != nil {
 		panic(err.Error())
 	}
+
+	if err := secrets.RegisterReader(Name, func(secretConfig map[string]interface{}) (secrets.SecretReader, error) {
+		return New(secretConfig)
+	}); err != nil {
+		panic(err.Error())
+	}
+
+	if err := secrets.RegisterStore(Name, func(secretConfig map[string]interface{}) (secrets.SecretStore, error) {
+		return New(secretConfig)
+	}); err != nil {
+		panic(err.Error())
+	}
 }
