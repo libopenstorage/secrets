@@ -35,6 +35,16 @@ func New(
 		return nil, utils.ErrAWSCredsNotProvided
 	}
 
+	awsConfig, ok := secretConfig[utils.AwsConfigKey]
+	if ok {
+		awsConfig, ok := awsConfig.(*aws.Config)
+		if !ok {
+			return nil, utils.ErrAWSConfigWrongType
+		}
+
+		return NewFromAWSConfig(awsConfig)
+	}
+
 	v, _ := secretConfig[utils.AwsRegionKey]
 	region, _ := v.(string)
 	if region == "" {
