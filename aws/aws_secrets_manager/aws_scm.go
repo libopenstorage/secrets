@@ -253,7 +253,7 @@ func (a *AWSSecretsMgr) delete(
 	secretID string,
 	retentionPeriodInDays int64,
 ) error {
-	if retentionPeriodInDays < 7 || retentionPeriodInDays > 30 {
+	if retentionPeriodInDays != 0 && (retentionPeriodInDays < 7 || retentionPeriodInDays > 30) {
 		return &secrets.ErrProviderInternal{
 			Reason:   "invalid retention period, value must be a number between 7 and 30",
 			Provider: Name,
