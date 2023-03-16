@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
-	"github.com/libopenstorage/secrets/aws/utils"
 	"os"
 	"strconv"
 	"strings"
@@ -13,8 +11,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/libopenstorage/secrets"
 	sc "github.com/libopenstorage/secrets/aws/credentials"
+	"github.com/libopenstorage/secrets/aws/utils"
 )
 
 const (
