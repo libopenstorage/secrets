@@ -55,7 +55,10 @@ func RegisterStore(name string, init StoreInit) error {
 		return fmt.Errorf("secrets store %v is already registered", name)
 	}
 	secretStores[name] = init
-	return nil
+
+	return RegisterReader(name, func(m map[string]interface{}) (SecretReader, error) {
+		return init(m)
+	})
 }
 
 type SecretKey struct {
