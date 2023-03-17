@@ -24,10 +24,12 @@ const (
 	SecretRetentionPeriodInDaysKey = "secret-retention-period-in-days"
 )
 
+// AWSSecretsMgr is backend for secrets.SecretStore.
 type AWSSecretsMgr struct {
 	scm *secretsmanager.SecretsManager
 }
 
+// New creates new instance of AWSSecretsMgr with provided configuration.
 func New(
 	secretConfig map[string]interface{},
 ) (*AWSSecretsMgr, error) {
@@ -74,6 +76,7 @@ func New(
 	return NewFromAWSConfig(config)
 }
 
+// NewFromAWSConfig creates new instance of AWSSecretsMgr with provided AWS configuration (aws.Config).
 func NewFromAWSConfig(config *aws.Config) (*AWSSecretsMgr, error) {
 	sess, err := session.NewSession(config)
 	if err != nil {
