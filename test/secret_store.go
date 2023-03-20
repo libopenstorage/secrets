@@ -84,9 +84,9 @@ func (a *storeTest) TestGetSecret(t *testing.T) {
 	assert.NotNil(t, plainText2, "Get with name and prefix plainText to not be nil")
 	v, ok = plainText2["key3"]
 	assert.True(t, ok, "Get with name and prefix unexpected secretData")
-	str, ok = v.(string)
+	str2, ok := v.(string)
 	assert.True(t, ok, "Get with name and prefix unexpected secretData")
-	assert.Equal(t, str, "value1", "Get with name and prefix unexpected secretData")
+	assert.Equal(t, str2, "value3", "Get with name and prefix unexpected secretData")
 
 	// Get using a name without data
 	_, err = a.s.Get(context.Background(), secrets.SecretKey{Name: a.secretNameWithoutData})
