@@ -252,7 +252,7 @@ github.com/portworx/dcos-secrets
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20220208024433-611d861089d4
+# github.com/portworx/sched-ops v1.20.4-rc1
 github.com/portworx/sched-ops/k8s/common
 github.com/portworx/sched-ops/k8s/core
 github.com/portworx/sched-ops/k8s/errors
