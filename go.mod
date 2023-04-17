@@ -23,9 +23,8 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611
 	github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20220208024433-611d861089d4
+	github.com/portworx/sched-ops v1.20.4-rc1
 	github.com/prometheus/client_golang v1.14.0 // indirect
-	github.com/shirou/gopsutil v2.19.9+incompatible // indirect
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/goleak v1.2.0 // indirect

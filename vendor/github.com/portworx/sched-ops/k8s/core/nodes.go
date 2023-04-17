@@ -135,13 +135,8 @@ func (c *Client) IsNodeReady(name string) error {
 
 // IsNodeMaster returns true if given node is a kubernetes master node
 func (c *Client) IsNodeMaster(node corev1.Node) bool {
-	// for newer k8s these fields exist but they are empty
-	_, hasMasterLabel := node.Labels[masterLabelKey]
-	_, hasControlPlaneLabel := node.Labels[controlplaneLabelKey]
-	if hasMasterLabel || hasControlPlaneLabel {
-		return true
-	}
-	return false
+	_, ok := node.Labels[masterLabelKey]
+	return ok
 }
 
 // GetLabelsOnNode gets all the labels on the given node
