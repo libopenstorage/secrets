@@ -14,6 +14,8 @@ const (
 	AwsTokenKey = "AWS_SECRET_TOKEN_KEY"
 	// AwsRegionKey defines the AWS region
 	AwsRegionKey = "AWS_REGION"
+	// AwsConfigKey defines the AWS configuration
+	AwsConfigKey = "AWS_CONFIG"
 )
 
 var (
@@ -25,6 +27,7 @@ var (
 	ErrInvalidKvdbProvided = errors.New("Invalid kvdb provided. AWS KMS works in conjuction with a kvdb")
 	// ErrAWSCredsNotProvided is returned when aws credentials are not provided
 	ErrAWSCredsNotProvided = errors.New("aws credentials not provided")
+	ErrAWSConfigWrongType  = errors.New("aws config has incorrect type")
 )
 
 func AuthKeys(params map[string]interface{}) (string, string, string, error) {

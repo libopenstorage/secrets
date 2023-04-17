@@ -9,36 +9,38 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/IBM/keyprotect-go-client v0.5.1
 	github.com/aws/aws-sdk-go v1.44.164
-	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/go-openapi/jsonreference v0.20.0 // indirect
 	github.com/golang/mock v1.6.0
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/hashicorp/vault v1.12.2
 	github.com/hashicorp/vault/api v1.8.0
 	github.com/hashicorp/vault/api/auth/approle v0.1.0
-	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
-	github.com/onsi/ginkgo/v2 v2.6.0 // indirect
-	github.com/onsi/gomega v1.24.1 // indirect
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611
 	github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467
 	github.com/portworx/sched-ops v1.20.4-rc1
-	github.com/prometheus/client_golang v1.14.0 // indirect
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.0
+	google.golang.org/api v0.83.0
+	k8s.io/client-go v12.0.0+incompatible
+)
+
+require (
+	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
+	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/go-openapi/jsonreference v0.20.0 // indirect
+	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
+	github.com/onsi/ginkgo/v2 v2.6.0 // indirect
+	github.com/onsi/gomega v1.24.1 // indirect
+	github.com/prometheus/client_golang v1.14.0 // indirect
 	go.uber.org/goleak v1.2.0 // indirect
 	golang.org/x/net v0.3.1-0.20221206200815-1e63c2f08a10 // indirect
 	golang.org/x/oauth2 v0.0.0-20220524215830-622c5d57e401
 	golang.org/x/time v0.3.0 // indirect
-	google.golang.org/api v0.83.0
 	k8s.io/api v0.26.0 // indirect
 	k8s.io/apimachinery v0.26.0 // indirect
-	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
-
 )
 
 replace (
