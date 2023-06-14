@@ -8,10 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/awserr"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/libopenstorage/secrets"
 	sc "github.com/libopenstorage/secrets/aws/credentials"
 	"github.com/libopenstorage/secrets/aws/utils"
@@ -26,7 +25,7 @@ const (
 
 // AWSSecretsMgr is backend for secrets.SecretStore.
 type AWSSecretsMgr struct {
-	scm *secretsmanager.SecretsManager
+	scm *secretsmanager.Client
 }
 
 // New creates new instance of AWSSecretsMgr with provided configuration.
@@ -68,21 +67,22 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get credentials: %v", err)
 	}
-	config := &aws.Config{
+	config := aws.Config{
 		Credentials: creds,
-		Region:      &region,
+		Region:      region,
 	}
 
-	return NewFromAWSConfig(config)
+	return NewFromAWSConfig(&config)
 }
 
 // NewFromAWSConfig creates new instance of AWSSecretsMgr with provided AWS configuration (aws.Config).
 func NewFromAWSConfig(config *aws.Config) (*AWSSecretsMgr, error) {
-	sess, err := session.NewSession(config)
+	cfg, err := external.LoadDefaultAWSConfig(*config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create a session: %v", err)
+		return nil, fmt.Errorf("failed to load AWS config: %v", err)
 	}
-	scm := secretsmanager.New(sess)
+
+	scm := secretsmanager.NewFromConfig(cfg)
 	return &AWSSecretsMgr{
 		scm: scm,
 	}, nil
@@ -104,205 +104,140 @@ func (a *AWSSecretsMgr) Set(_ context.Context, key secrets.SecretKey, secret map
 	return err
 }
 
-func (a *AWSSecretsMgr) Delete(_ context.Context, key secrets.SecretKey) error {
+func (a *AWSSecretsMgr) Delete(ctx context.Context, key secrets.SecretKey) error {
 	secretID := createSecretId(key)
-	return a.delete(secretID, 0)
-}
 
-func (a *AWSSecretsMgr) GetSecret(
-	secretID string,
-	_ map[string]string,
-) (map[string]interface{}, secrets.Version, error) {
-	return a.get(secretID)
-}
+	retentionPeriodInDays := getSecretRetentionPeriodFromContext(ctx)
 
-func (a *AWSSecretsMgr) PutSecret(
-	secretID string,
-	secretData map[string]interface{},
-	_ map[string]string,
-) (secrets.Version, error) {
-	return a.put(secretID, secretData)
-}
-
-func (a *AWSSecretsMgr) DeleteSecret(
-	secretID string,
-	keyContext map[string]string,
-) error {
-	retentionPeriodInDays := 0
-	retentionPeriod, ok := keyContext[SecretRetentionPeriodInDaysKey]
-	if ok {
-		var err error
-		retentionPeriodInDays, err = strconv.Atoi(retentionPeriod)
-		if err != nil {
-			return &secrets.ErrProviderInternal{
-				Reason:   "invalid retention period, value must be a number between 7 and 30",
-				Provider: Name,
-			}
-		}
+	if retentionPeriodInDays > 0 {
+		return a.deleteSecretWithRetention(secretID, retentionPeriodInDays)
 	}
 
-	return a.delete(secretID, int64(retentionPeriodInDays))
+	_, err := a.deleteSecret(secretID)
+	return err
 }
 
-func (a *AWSSecretsMgr) ListSecrets() ([]string, error) {
-	return nil, secrets.ErrNotSupported
-}
-
-func (a *AWSSecretsMgr) Encrypt(
-	_ string,
-	_ string,
-	_ map[string]string,
-) (string, error) {
-	return "", secrets.ErrNotSupported
-}
-
-func (a *AWSSecretsMgr) Decrypt(
-	_ string,
-	_ string,
-	_ map[string]string,
-) (string, error) {
-	return "", secrets.ErrNotSupported
-}
-
-func (a *AWSSecretsMgr) Rencrypt(
-	_ string,
-	_ string,
-	_ map[string]string,
-	_ map[string]string,
-	_ string,
-) (string, error) {
-	return "", secrets.ErrNotSupported
-}
-
-func (a *AWSSecretsMgr) get(secretID string) (map[string]interface{}, secrets.Version, error) {
-	secretValueOutput, err := a.scm.GetSecretValue(&secretsmanager.GetSecretValueInput{
+func (a *AWSSecretsMgr) get(secretID string) (map[string]interface{}, string, error) {
+	input := &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretID),
-	})
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == secretsmanager.ErrCodeResourceNotFoundException {
-				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
-			} else if aerr.Code() == secretsmanager.ErrCodeInvalidRequestException &&
-				strings.Contains(aerr.Error(), "marked for deletion") {
-				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
-			}
-		}
-		return nil, secrets.NoVersion, &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
 	}
-	if secretValueOutput.SecretString == nil || len(*secretValueOutput.SecretString) <= 0 {
-		return nil, secrets.NoVersion, secrets.ErrEmptySecretData
-	}
-	secretOut := make(map[string]interface{})
-	if err := json.Unmarshal([]byte(*secretValueOutput.SecretString), &secretOut); err != nil {
-		secretOut = make(map[string]interface{})
-		secretOut[secretID] = *secretValueOutput.SecretString
 
+	result, err := a.scm.GetSecretValue(context.TODO(), input)
+	if err != nil {
+		return nil, "", convertAWSErr(err)
 	}
-	if secretValueOutput.VersionId == nil {
-		return nil, secrets.NoVersion, fmt.Errorf("invalid version returned by aws")
+
+	var secret map[string]interface{}
+	if err := json.Unmarshal([]byte(*result.SecretString), &secret); err != nil {
+		return nil, "", fmt.Errorf("failed to unmarshal secret value: %v", err)
 	}
-	return secretOut, secrets.Version(*secretValueOutput.VersionId), nil
+
+	return secret, *result.VersionId, nil
 }
 
-func (a *AWSSecretsMgr) put(
-	secretID string,
-	secretData map[string]interface{},
-) (secrets.Version, error) {
-	// Marshal the secret data
-	secretBytes, err := json.Marshal(secretData)
+func (a *AWSSecretsMgr) put(secretID string, secret map[string]interface{}) (string, error) {
+	secretValue, err := json.Marshal(secret)
 	if err != nil {
-		return secrets.NoVersion, fmt.Errorf("failed to marshal secret data: %v", err)
+		return "", fmt.Errorf("failed to marshal secret value: %v", err)
 	}
-	// Check if there already exists a key.
-	_, err = a.scm.GetSecretValue(&secretsmanager.GetSecretValueInput{
+
+	input := &secretsmanager.PutSecretValueInput{
+		SecretId:     aws.String(secretID),
+		SecretString: aws.String(string(secretValue)),
+	}
+
+	result, err := a.scm.PutSecretValue(context.TODO(), input)
+	if err != nil {
+		return "", convertAWSErr(err)
+	}
+
+	return *result.VersionId, nil
+}
+
+func (a *AWSSecretsMgr) deleteSecret(secretID string) (string, error) {
+	input := &secretsmanager.DeleteSecretInput{
 		SecretId: aws.String(secretID),
-	})
-	if err == nil {
-		// Update the existing secret
-		secretValueOutput, putErr := a.scm.PutSecretValue(&secretsmanager.PutSecretValueInput{
-			SecretId:     aws.String(secretID),
-			SecretString: aws.String(string(secretBytes)),
-		})
-		if putErr != nil {
-			return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: putErr.Error(), Provider: Name}
-		}
-		if secretValueOutput.VersionId == nil {
-			return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: "invalid version returned by aws", Provider: Name}
-		}
-		return secrets.Version(*secretValueOutput.VersionId), nil
-	} else {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == secretsmanager.ErrCodeResourceNotFoundException {
-				// Create a new secret
-				secretValueOutput, createErr := a.scm.CreateSecret(&secretsmanager.CreateSecretInput{
-					SecretString: aws.String(string(secretBytes)),
-					Name:         aws.String(secretID),
-				})
-				if createErr != nil {
-					return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: createErr.Error(), Provider: Name}
-				}
-				if secretValueOutput.VersionId == nil {
-					return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: "invalid version returned by aws", Provider: Name}
-				}
-				return secrets.Version(*secretValueOutput.VersionId), nil
-			} // return the aws error
-		} // return the non-aws error
 	}
-	// Gets, Puts & Creates have failed
-	return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
+
+	result, err := a.scm.DeleteSecret(context.TODO(), input)
+	if err != nil {
+		return "", convertAWSErr(err)
+	}
+
+	return *result.DeletionDate, nil
 }
 
-func (a *AWSSecretsMgr) delete(
-	secretID string,
-	retentionPeriodInDays int64,
-) error {
-	if retentionPeriodInDays != 0 && (retentionPeriodInDays < 7 || retentionPeriodInDays > 30) {
-		return &secrets.ErrProviderInternal{
-			Reason:   "invalid retention period, value must be a number between 7 and 30",
-			Provider: Name,
-		}
+func (a *AWSSecretsMgr) deleteSecretWithRetention(secretID string, retentionPeriodInDays int) error {
+	input := &secretsmanager.DeleteSecretInput{
+		SecretId: aws.String(secretID),
 	}
-
-	var deleteSecretInput *secretsmanager.DeleteSecretInput
-	if retentionPeriodInDays == 0 {
-		deleteSecretInput = &secretsmanager.DeleteSecretInput{
-			// By default, aws keeps the secret for 30 days
-			// Delete immediately
-			ForceDeleteWithoutRecovery: aws.Bool(true),
-			SecretId:                   aws.String(secretID),
-		}
-	} else {
-		deleteSecretInput = &secretsmanager.DeleteSecretInput{
-			SecretId:             aws.String(secretID),
-			RecoveryWindowInDays: aws.Int64(retentionPeriodInDays),
-		}
-	}
-
-	_, err := a.scm.DeleteSecret(deleteSecretInput)
+	ctx := context.WithValue(context.Background(), SecretRetentionPeriodInDaysKey, retentionPeriodInDays)
+	_, err := a.scm.DeleteSecretWithContext(ctx, input)
 	if err != nil {
-		return &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
+		return convertAWSErr(err)
 	}
+
 	return nil
 }
 
-func createSecretId(key secrets.SecretKey) string {
-	if key.Prefix == "" {
-		return key.Name
-	}
-
-	return fmt.Sprintf("%s/%s", key.Prefix, key.Name)
+func (a *AWSSecretsMgr) Type() string {
+	return Name
 }
 
-func init() {
-	if err := secrets.Register(Name, func(secretConfig map[string]interface{}) (secrets.Secrets, error) {
-		return New(secretConfig)
-	}); err != nil {
-		panic(err.Error())
+func (a *AWSSecretsMgr) Versions(key secrets.SecretKey) ([]string, error) {
+	secretID := createSecretId(key)
+
+	input := &secretsmanager.DescribeSecretInput{
+		SecretId: aws.String(secretID),
 	}
 
-	if err := secrets.RegisterStore(Name, func(secretConfig map[string]interface{}) (secrets.SecretStore, error) {
-		return New(secretConfig)
-	}); err != nil {
-		panic(err.Error())
+	result, err := a.scm.DescribeSecret(context.Background(), input)
+	if err != nil {
+		return nil, convertAWSErr(err)
 	}
+
+	var versions []string
+	for _, version := range result.VersionIdsToStages {
+		versions = append(versions, *version)
+	}
+
+	return versions, nil
+}
+
+func (a *AWSSecretsMgr) Version(key secrets.SecretKey, version string) (map[string]interface{}, error) {
+	secretID := createSecretId(key)
+
+	input := &secretsmanager.GetSecretValueInput{
+		SecretId:         aws.String(secretID),
+		VersionStage:     aws.String(version),
+		VersionId:        aws.String(version),
+	}
+
+	result, err := a.scm.GetSecretValue(context.Background(), input)
+	if err != nil {
+		return nil, convertAWSErr(err)
+	}
+
+	var secret map[string]interface{}
+	if err := json.Unmarshal([]byte(*result.SecretString), &secret); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal secret value: %v", err)
+	}
+
+	return secret, nil
+}
+
+func createSecretId(key secrets.SecretKey) string {
+	return fmt.Sprintf("%s/%s", key.Namespace, key.Name)
+}
+
+func convertAWSErr(err error) error {
+	if awsErr, ok := err.(awserr.Error); ok {
+		return fmt.Errorf("AWS error: %s - %s", awsErr.Code(), awsErr.Message())
+	}
+	return err
+}
+
+func getSecretRetentionPeriodFromContext(ctx context.Context) int {
+	retentionPeriodInDays, _ := ctx.Value(SecretRetentionPeriodInDaysKey).(int)
+	return retentionPeriodInDays
 }

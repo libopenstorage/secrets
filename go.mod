@@ -25,6 +25,11 @@ require (
 )
 
 require (
+	github.com/aws/aws-sdk-go-v2 v1.18.1
+	github.com/aws/aws-sdk-go-v2/config v1.6.0
+	github.com/aws/aws-sdk-go-v2/credentials v1.3.2
+	github.com/aws/aws-sdk-go-v2/service/kms v1.22.1
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.19.9
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect

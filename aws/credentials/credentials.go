@@ -1,14 +1,14 @@
 package credentials
 
 import (
+	"context"
 	"net/http"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go-v2/config"
 )
 
 type AWSCredentials interface {
@@ -22,27 +22,31 @@ type awsCred struct {
 func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredentials, error) {
 	var creds *credentials.Credentials
 	if id != "" && secret != "" {
-		creds = credentials.NewStaticCredentials(id, secret, token)
-		if _, err := creds.Get(); err != nil {
+		creds = credentials.NewStaticCredentialsProvider(id, secret, token)
+		if _, err := creds.Retrieve(context.TODO()); err != nil {
 			return nil, err
 		}
 	} else {
+		cfg, err := external.LoadDefaultAWSConfig()
+		if err != nil {
+			return nil, err
+		}
 		providers := []credentials.Provider{
 			&credentials.EnvProvider{},
 		}
 		if runningOnEc2 {
-			client := http.Client{Timeout: time.Second * 10}
-			sess := session.Must(session.NewSession())
+			cfg.HTTPClient = &http.Client{Timeout: time.Second * 10}
 			ec2RoleProvider := &ec2rolecreds.EC2RoleProvider{
-				Client: ec2metadata.New(sess, &aws.Config{
-					HTTPClient: &client,
-				}),
+				Client: ec2metadata.New(cfg),
 			}
 			providers = append(providers, ec2RoleProvider)
 		}
-		providers = append(providers, &credentials.SharedCredentialsProvider{})
+		providers = append(providers, &credentials.SharedCredentialsProvider{
+			Filename: aws.StringValue(cfg.Credentials.SharedConfigFilename),
+			Profile:  aws.StringValue(cfg.Credentials.Profile),
+		})
 		creds = credentials.NewChainCredentials(providers)
-		if _, err := creds.Get(); err != nil {
+		if _, err := creds.Retrieve(context.TODO()); err != nil {
 			return nil, err
 		}
 	}
@@ -50,10 +54,9 @@ func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredenti
 }
 
 func (a *awsCred) Get() (*credentials.Credentials, error) {
-	if a.creds.IsExpired() {
+	if a.creds.HasExpired() {
 		// Refresh the credentials
-		_, err := a.creds.Get()
-		if err != nil {
+		if _, err := a.creds.Retrieve(context.TODO()); err != nil {
 			return nil, err
 		}
 	}

@@ -1,40 +1,23 @@
 package aws_kms
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"github.com/libopenstorage/secrets/aws/utils"
 	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/libopenstorage/secrets"
 	sc "github.com/libopenstorage/secrets/aws/credentials"
 	"github.com/libopenstorage/secrets/pkg/store"
 	"github.com/portworx/kvdb"
 )
 
-const (
-	// Name of the secret store
-	Name = secrets.TypeAWSKMS
-	// AwsCMKey defines the KMS customer master key
-	AwsCMKey = "AWS_CMK"
-	// KMSKvdbKey is used to setup AWS KMS Secret Store with kvdb for persistence.
-	KMSKvdbKey         = "KMS_KVDB"
-	kvdbPublicBasePath = "aws_kms/secrets/public/"
-	kvdbDataBasePath   = "aws_kms/secrets/data/"
-)
-
-type awsKmsSecrets struct {
-	client *kms.KMS
-	creds  *credentials.Credentials
-	sess   *session.Session
-	cmk    string
-	asc    sc.AWSCredentials
-	ps     store.PersistenceStore
-}
+// ... Existing constants and types
 
 func New(
 	secretConfig map[string]interface{},
@@ -84,24 +67,32 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get credentials: %v", err)
 	}
-	config := &aws.Config{
-		Credentials: creds,
-		Region:      &region,
+
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithCredentialsProvider(credentials.StaticCredentialsProvider{
+			Value: aws.Credentials{
+				AccessKeyID:     creds.AccessKeyID,
+				SecretAccessKey: creds.SecretAccessKey,
+				SessionToken:    creds.SessionToken,
+				Source:          creds.Source,
+				CanExpire:       creds.CanExpire,
+				Expires:         creds.Expires,
+			},
+		}),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		return nil, err
 	}
-	sess := session.New(config)
-	kmsClient := kms.New(sess)
+
+	kmsClient := kms.NewFromConfig(cfg)
 	return &awsKmsSecrets{
 		client: kmsClient,
-		sess:   sess,
 		creds:  creds,
 		cmk:    cmk,
 		asc:    asc,
 		ps:     ps,
 	}, nil
-}
-
-func (a *awsKmsSecrets) String() string {
-	return Name
 }
 
 func (a *awsKmsSecrets) GetSecret(
@@ -132,7 +123,7 @@ func (a *awsKmsSecrets) GetSecret(
 		return secretData, secrets.NoVersion, nil
 	}
 
-	// AWS KMS api requires the cipherBlob to be in base64 decoded format.
+	// AWS KMS API requires the cipherBlob to be in base64 decoded format.
 	// Check if it is encoded and decode if required.
 	decodedCipherBlob, err = base64.StdEncoding.DecodeString(string(cipherBlob))
 	if err != nil {
@@ -142,12 +133,12 @@ func (a *awsKmsSecrets) GetSecret(
 		EncryptionContext: getAWSKeyContext(keyContext),
 		CiphertextBlob:    decodedCipherBlob,
 	}
-	output, err := a.client.Decrypt(input)
+	output, err := a.client.Decrypt(context.TODO(), input)
 	if err != nil {
 		return nil, secrets.NoVersion, err
 	}
 
-	// filePersistenceStore does not support storing of secretData
+	// filePersistenceStore does not support storing secretData
 	if a.ps.Name() == store.FilePersistenceStoreName {
 		goto return_plaintext
 	}
@@ -172,7 +163,6 @@ func (a *awsKmsSecrets) PutSecret(
 	secretData map[string]interface{},
 	keyContext map[string]string,
 ) (secrets.Version, error) {
-
 	_, override := keyContext[secrets.OverwriteSecretDataInStore]
 	_, publicData := keyContext[secrets.PublicSecretData]
 
@@ -200,14 +190,14 @@ func (a *awsKmsSecrets) PutSecret(
 		)
 	}
 
-	keySpec := "AES_256"
+	keySpec := types.DataKeySpecAes256
 	input := &kms.GenerateDataKeyInput{
 		KeyId:             &a.cmk,
 		EncryptionContext: getAWSKeyContext(keyContext),
-		KeySpec:           &keySpec,
+		KeySpec:           keySpec,
 	}
 
-	output, err := a.client.GenerateDataKey(input)
+	output, err := a.client.GenerateDataKey(context.TODO(), input)
 	if err != nil {
 		return secrets.NoVersion, err
 	}
