@@ -17,7 +17,25 @@ import (
 	"github.com/portworx/kvdb"
 )
 
-// ... Existing constants and types
+const (
+	// Name of the secret store
+	Name = secrets.TypeAWSKMS
+	// AwsCMKey defines the KMS customer master key
+	AwsCMKey = "AWS_CMK"
+	// KMSKvdbKey is used to setup AWS KMS Secret Store with kvdb for persistence.
+	KMSKvdbKey         = "KMS_KVDB"
+	kvdbPublicBasePath = "aws_kms/secrets/public/"
+	kvdbDataBasePath   = "aws_kms/secrets/data/"
+)
+
+type awsKmsSecrets struct {
+	client *kms.KMS
+	creds  *credentials.Credentials
+	sess   *session.Session
+	cmk    string
+	asc    sc.AWSCredentials
+	ps     store.PersistenceStore
+}
 
 func New(
 	secretConfig map[string]interface{},
