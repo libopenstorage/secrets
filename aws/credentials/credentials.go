@@ -2,63 +2,63 @@ package credentials
 
 import (
 	"context"
-	"net/http"
+	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/transport/http"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 )
 
 type AWSCredentials interface {
-	Get() (*credentials.Credentials, error)
+	Get() (*aws.Credentials, error)
 }
 
 type awsCred struct {
-	creds *credentials.Credentials
+	creds *aws.Credentials
 }
 
 func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredentials, error) {
-	var creds *credentials.Credentials
+	var creds aws.Credentials
 	if id != "" && secret != "" {
-		creds = credentials.NewStaticCredentialsProvider(id, secret, token)
-		if _, err := creds.Retrieve(context.TODO()); err != nil {
+		provider := credentials.NewStaticCredentialsProvider(id, secret, token)
+		var err error
+		if creds, err = provider.Retrieve(context.TODO()); err != nil {
 			return nil, err
 		}
 	} else {
-		cfg, err := external.LoadDefaultAWSConfig()
+		defaultCfg, err := config.LoadDefaultConfig(context.TODO())
 		if err != nil {
 			return nil, err
 		}
-		providers := []credentials.Provider{
-			&credentials.EnvProvider{},
-		}
 		if runningOnEc2 {
-			cfg.HTTPClient = &http.Client{Timeout: time.Second * 10}
-			ec2RoleProvider := &ec2rolecreds.EC2RoleProvider{
-				Client: ec2metadata.New(cfg),
+			defaultCfg.HTTPClient = http.NewBuildableClient().WithTimeout(10 * time.Second)
+
+			defaultProvider := config.WithCredentialsProvider(defaultCfg.Credentials)
+			ec2provider := config.WithCredentialsProvider(ec2rolecreds.New(func(o *ec2rolecreds.Options) {
+				o.Client = imds.NewFromConfig(defaultCfg)
+			}))
+
+			cfg, err := config.LoadDefaultConfig(context.TODO(),
+				defaultProvider,
+				ec2provider,
+			)
+			if err != nil {
+				log.Fatal(err)
 			}
-			providers = append(providers, ec2RoleProvider)
-		}
-		providers = append(providers, &credentials.SharedCredentialsProvider{
-			Filename: aws.StringValue(cfg.Credentials.SharedConfigFilename),
-			Profile:  aws.StringValue(cfg.Credentials.Profile),
-		})
-		creds = credentials.NewChainCredentials(providers)
-		if _, err := creds.Retrieve(context.TODO()); err != nil {
-			return nil, err
+
+			creds, err = cfg.Credentials.Retrieve(context.Background())
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-	return &awsCred{creds}, nil
+	return &awsCred{&creds}, nil
 }
 
-func (a *awsCred) Get() (*credentials.Credentials, error) {
-	if a.creds.HasExpired() {
-		// Refresh the credentials
-		if _, err := a.creds.Retrieve(context.TODO()); err != nil {
-			return nil, err
-		}
-	}
+func (a *awsCred) Get() (*aws.Credentials, error) {
 	return a.creds, nil
 }
