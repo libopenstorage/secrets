@@ -1,61 +1,64 @@
 package credentials
 
 import (
-	"net/http"
+	"context"
+	"log"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/transport/http"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 )
 
 type AWSCredentials interface {
-	Get() (*credentials.Credentials, error)
+	Get() (*aws.Credentials, error)
 }
 
 type awsCred struct {
-	creds *credentials.Credentials
+	creds *aws.Credentials
 }
 
 func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredentials, error) {
-	var creds *credentials.Credentials
+	var creds aws.Credentials
 	if id != "" && secret != "" {
-		creds = credentials.NewStaticCredentials(id, secret, token)
-		if _, err := creds.Get(); err != nil {
+		provider := credentials.NewStaticCredentialsProvider(id, secret, token)
+		var err error
+		if creds, err = provider.Retrieve(context.TODO()); err != nil {
 			return nil, err
 		}
 	} else {
-		providers := []credentials.Provider{
-			&credentials.EnvProvider{},
-		}
-		if runningOnEc2 {
-			client := http.Client{Timeout: time.Second * 10}
-			sess := session.Must(session.NewSession())
-			ec2RoleProvider := &ec2rolecreds.EC2RoleProvider{
-				Client: ec2metadata.New(sess, &aws.Config{
-					HTTPClient: &client,
-				}),
-			}
-			providers = append(providers, ec2RoleProvider)
-		}
-		providers = append(providers, &credentials.SharedCredentialsProvider{})
-		creds = credentials.NewChainCredentials(providers)
-		if _, err := creds.Get(); err != nil {
-			return nil, err
-		}
-	}
-	return &awsCred{creds}, nil
-}
-
-func (a *awsCred) Get() (*credentials.Credentials, error) {
-	if a.creds.IsExpired() {
-		// Refresh the credentials
-		_, err := a.creds.Get()
+		defaultCfg, err := config.LoadDefaultConfig(context.TODO())
 		if err != nil {
 			return nil, err
 		}
+		if runningOnEc2 {
+			defaultCfg.HTTPClient = http.NewBuildableClient().WithTimeout(10 * time.Second)
+
+			defaultProvider := config.WithCredentialsProvider(defaultCfg.Credentials)
+			ec2provider := config.WithCredentialsProvider(ec2rolecreds.New(func(o *ec2rolecreds.Options) {
+				o.Client = imds.NewFromConfig(defaultCfg)
+			}))
+
+			cfg, err := config.LoadDefaultConfig(context.TODO(),
+				defaultProvider,
+				ec2provider,
+			)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			creds, err = cfg.Credentials.Retrieve(context.Background())
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
+	return &awsCred{&creds}, nil
+}
+
+func (a *awsCred) Get() (*aws.Credentials, error) {
 	return a.creds, nil
 }

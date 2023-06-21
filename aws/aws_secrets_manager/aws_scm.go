@@ -3,15 +3,16 @@ package aws_secrets_manager
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/smithy-go"
 	"github.com/libopenstorage/secrets"
 	sc "github.com/libopenstorage/secrets/aws/credentials"
 	"github.com/libopenstorage/secrets/aws/utils"
@@ -26,7 +27,7 @@ const (
 
 // AWSSecretsMgr is backend for secrets.SecretStore.
 type AWSSecretsMgr struct {
-	scm *secretsmanager.SecretsManager
+	scm *secretsmanager.Client
 }
 
 // New creates new instance of AWSSecretsMgr with provided configuration.
@@ -39,7 +40,7 @@ func New(
 
 	awsConfig, ok := secretConfig[utils.AwsConfigKey]
 	if ok {
-		awsConfig, ok := awsConfig.(*aws.Config)
+		awsConfig, ok := awsConfig.(aws.Config)
 		if !ok {
 			return nil, utils.ErrAWSConfigWrongType
 		}
@@ -68,21 +69,30 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get credentials: %v", err)
 	}
-	config := &aws.Config{
-		Credentials: creds,
-		Region:      &region,
+	credProv := CredentialsToProvider(creds)
+	config := aws.Config{
+		Credentials: credProv,
+		Region:      region,
 	}
 
 	return NewFromAWSConfig(config)
 }
 
-// NewFromAWSConfig creates new instance of AWSSecretsMgr with provided AWS configuration (aws.Config).
-func NewFromAWSConfig(config *aws.Config) (*AWSSecretsMgr, error) {
-	sess, err := session.NewSession(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a session: %v", err)
+// credentialsToProvider converts a aws.Credential object to a aws.CredentialProvider object
+func CredentialsToProvider(creds *aws.Credentials) aws.CredentialsProvider {
+	return credentials.StaticCredentialsProvider{
+		Value: aws.Credentials{
+			AccessKeyID:     creds.AccessKeyID,
+			SecretAccessKey: creds.SecretAccessKey,
+			SessionToken:    creds.SessionToken,
+			Source:          creds.Source,
+		},
 	}
-	scm := secretsmanager.New(sess)
+}
+
+// NewFromAWSConfig creates new instance of AWSSecretsMgr with provided AWS configuration (aws.Config).
+func NewFromAWSConfig(config aws.Config) (*AWSSecretsMgr, error) {
+	scm := secretsmanager.NewFromConfig(config)
 	return &AWSSecretsMgr{
 		scm: scm,
 	}, nil
@@ -175,15 +185,17 @@ func (a *AWSSecretsMgr) Rencrypt(
 }
 
 func (a *AWSSecretsMgr) get(secretID string) (map[string]interface{}, secrets.Version, error) {
-	secretValueOutput, err := a.scm.GetSecretValue(&secretsmanager.GetSecretValueInput{
+	secretValueOutput, err := a.scm.GetSecretValue(context.TODO(), &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretID),
 	})
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == secretsmanager.ErrCodeResourceNotFoundException {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			// aerr, ok := err.(awserr.Error); ok {
+			if apiErr.ErrorCode() == "ResourceNotFoundException" {
 				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
-			} else if aerr.Code() == secretsmanager.ErrCodeInvalidRequestException &&
-				strings.Contains(aerr.Error(), "marked for deletion") {
+			} else if apiErr.ErrorCode() == "InvalidRequestException" &&
+				strings.Contains(apiErr.ErrorCode(), "marked for deletion") {
 				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
 			}
 		}
@@ -214,12 +226,12 @@ func (a *AWSSecretsMgr) put(
 		return secrets.NoVersion, fmt.Errorf("failed to marshal secret data: %v", err)
 	}
 	// Check if there already exists a key.
-	_, err = a.scm.GetSecretValue(&secretsmanager.GetSecretValueInput{
+	_, err = a.scm.GetSecretValue(context.TODO(), &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretID),
 	})
 	if err == nil {
 		// Update the existing secret
-		secretValueOutput, putErr := a.scm.PutSecretValue(&secretsmanager.PutSecretValueInput{
+		secretValueOutput, putErr := a.scm.PutSecretValue(context.TODO(), &secretsmanager.PutSecretValueInput{
 			SecretId:     aws.String(secretID),
 			SecretString: aws.String(string(secretBytes)),
 		})
@@ -231,10 +243,12 @@ func (a *AWSSecretsMgr) put(
 		}
 		return secrets.Version(*secretValueOutput.VersionId), nil
 	} else {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == secretsmanager.ErrCodeResourceNotFoundException {
+		// if aerr, ok := err.(awserr.Error); ok {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			if apiErr.ErrorCode() == "ResourceNotFoundException" {
 				// Create a new secret
-				secretValueOutput, createErr := a.scm.CreateSecret(&secretsmanager.CreateSecretInput{
+				secretValueOutput, createErr := a.scm.CreateSecret(context.TODO(), &secretsmanager.CreateSecretInput{
 					SecretString: aws.String(string(secretBytes)),
 					Name:         aws.String(secretID),
 				})
@@ -278,7 +292,7 @@ func (a *AWSSecretsMgr) delete(
 		}
 	}
 
-	_, err := a.scm.DeleteSecret(deleteSecretInput)
+	_, err := a.scm.DeleteSecret(context.TODO(), deleteSecretInput)
 	if err != nil {
 		return &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
 	}
