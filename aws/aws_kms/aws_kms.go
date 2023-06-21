@@ -32,10 +32,9 @@ const (
 type awsKmsSecrets struct {
 	client *kms.Client
 	creds  *aws.Credentials
-	// sess   *session.Session
-	cmk string
-	asc sc.AWSCredentials
-	ps  store.PersistenceStore
+	cmk    string
+	asc    sc.AWSCredentials
+	ps     store.PersistenceStore
 }
 
 func New(
@@ -96,11 +95,10 @@ func New(
 
 	return &awsKmsSecrets{
 		client: kmsClient,
-		// sess:   sess,
-		creds: creds,
-		cmk:   cmk,
-		asc:   asc,
-		ps:    ps,
+		creds:  creds,
+		cmk:    cmk,
+		asc:    asc,
+		ps:     ps,
 	}, nil
 }
 

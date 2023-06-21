@@ -8,7 +8,7 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.20
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/IBM/keyprotect-go-client v0.5.1
-	github.com/aws/aws-sdk-go v1.44.164
+	github.com/aws/aws-sdk-go v1.44.164 // indirect
 	github.com/golang/mock v1.6.0
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/hashicorp/vault v1.12.2
