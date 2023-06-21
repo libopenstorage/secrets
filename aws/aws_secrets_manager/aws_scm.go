@@ -195,7 +195,7 @@ func (a *AWSSecretsMgr) get(secretID string) (map[string]interface{}, secrets.Ve
 			if apiErr.ErrorCode() == "ResourceNotFoundException" {
 				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
 			} else if apiErr.ErrorCode() == "InvalidRequestException" &&
-				strings.Contains(apiErr.ErrorCode(), "marked for deletion") {
+				strings.Contains(apiErr.ErrorCode(), "Marked for deletion") {
 				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
 			}
 		}
