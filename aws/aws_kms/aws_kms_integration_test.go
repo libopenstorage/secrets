@@ -6,6 +6,7 @@ package aws_kms
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/aws/utils"
@@ -163,6 +164,9 @@ func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 	// Delete of a key that exists should succeed
 	err := a.s.DeleteSecret(secretIdWithData, nil)
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
+
+	// Add a delay to allow time for deletion to propagate
+	time.Sleep(time.Second * 30)
 
 	// Get of a deleted key should fail
 	_, _, err = a.s.GetSecret(secretIdWithData, nil)

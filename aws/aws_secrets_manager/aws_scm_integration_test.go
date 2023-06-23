@@ -6,6 +6,7 @@ package aws_secrets_manager
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/aws/utils"
@@ -113,6 +114,9 @@ func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 	err := a.s.DeleteSecret(a.secretIdWithData, keyContext)
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
 
+	// Add a delay to allow time for deletion to propagate
+	time.Sleep(time.Second * 30)
+
 	// Get of a deleted key should fail
 	_, version, err := a.s.GetSecret(a.secretIdWithData, nil)
 	assert.EqualError(t, secrets.ErrInvalidSecretId, err.Error(), "Unexpected error on GetSecret after delete")
@@ -121,6 +125,9 @@ func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 	// Delete of a key that exists should succeed
 	err = a.s.DeleteSecret(a.secretIdWithoutData, nil)
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
+
+	// Add a delay to allow time for deletion to propagate
+	time.Sleep(time.Second * 30)
 
 	// GetSecret using a secretId without data
 	_, version, err = a.s.GetSecret(a.secretIdWithoutData, nil)
