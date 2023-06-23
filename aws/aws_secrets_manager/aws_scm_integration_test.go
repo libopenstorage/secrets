@@ -123,7 +123,7 @@ func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 	assert.Equal(t, version, secrets.NoVersion)
 
 	// Delete of a key that exists should succeed
-	err = a.s.DeleteSecret(a.secretIdWithoutData, nil)
+	err = a.s.DeleteSecret(a.secretIdWithoutData, keyContext)
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
 
 	// Add a delay to allow time for deletion to propagate
