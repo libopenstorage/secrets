@@ -166,7 +166,7 @@ func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
 
 	// Add a delay to allow time for deletion to propagate
-	time.Sleep(time.Second * 30)
+	time.Sleep(time.Second * 90)
 
 	// Get of a deleted key should fail
 	_, _, err = a.s.GetSecret(secretIdWithData, nil)
