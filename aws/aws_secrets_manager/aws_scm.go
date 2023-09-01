@@ -3,7 +3,6 @@ package aws_secrets_manager
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -12,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-	"github.com/aws/smithy-go"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 	"github.com/libopenstorage/secrets"
 	sc "github.com/libopenstorage/secrets/aws/credentials"
 	"github.com/libopenstorage/secrets/aws/utils"
@@ -189,15 +188,11 @@ func (a *AWSSecretsMgr) get(secretID string) (map[string]interface{}, secrets.Ve
 		SecretId: aws.String(secretID),
 	})
 	if err != nil {
-		var apiErr smithy.APIError
-		if errors.As(err, &apiErr) {
-			// aerr, ok := err.(awserr.Error); ok {
-			if apiErr.ErrorCode() == "ResourceNotFoundException" {
-				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
-			} else if apiErr.ErrorCode() == "InvalidRequestException" &&
-				strings.Contains(apiErr.ErrorCode(), "Marked for deletion") {
-				return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
-			}
+		if _, ok := err.(*types.ResourceNotFoundException); ok {
+			return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
+		} else if aerr, ok := err.(*types.InvalidRequestException); ok &&
+			strings.Contains(aerr.Error(), "marked for deletion") {
+			return nil, secrets.NoVersion, secrets.ErrInvalidSecretId
 		}
 		return nil, secrets.NoVersion, &secrets.ErrProviderInternal{Reason: err.Error(), Provider: Name}
 	}
@@ -243,23 +238,19 @@ func (a *AWSSecretsMgr) put(
 		}
 		return secrets.Version(*secretValueOutput.VersionId), nil
 	} else {
-		// if aerr, ok := err.(awserr.Error); ok {
-		var apiErr smithy.APIError
-		if errors.As(err, &apiErr) {
-			if apiErr.ErrorCode() == "ResourceNotFoundException" {
-				// Create a new secret
-				secretValueOutput, createErr := a.scm.CreateSecret(context.TODO(), &secretsmanager.CreateSecretInput{
-					SecretString: aws.String(string(secretBytes)),
-					Name:         aws.String(secretID),
-				})
-				if createErr != nil {
-					return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: createErr.Error(), Provider: Name}
-				}
-				if secretValueOutput.VersionId == nil {
-					return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: "invalid version returned by aws", Provider: Name}
-				}
-				return secrets.Version(*secretValueOutput.VersionId), nil
-			} // return the aws error
+		if _, ok := err.(*types.ResourceNotFoundException); ok {
+			// Create a new secret
+			secretValueOutput, createErr := a.scm.CreateSecret(context.TODO(), &secretsmanager.CreateSecretInput{
+				SecretString: aws.String(string(secretBytes)),
+				Name:         aws.String(secretID),
+			})
+			if createErr != nil {
+				return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: createErr.Error(), Provider: Name}
+			}
+			if secretValueOutput.VersionId == nil {
+				return secrets.NoVersion, &secrets.ErrProviderInternal{Reason: "invalid version returned by aws", Provider: Name}
+			}
+			return secrets.Version(*secretValueOutput.VersionId), nil
 		} // return the non-aws error
 	}
 	// Gets, Puts & Creates have failed
