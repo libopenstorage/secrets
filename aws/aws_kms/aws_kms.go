@@ -9,7 +9,6 @@ import (
 	"github.com/libopenstorage/secrets/aws/utils"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/libopenstorage/secrets"
@@ -85,7 +84,7 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get credentials: %v", err)
 	}
-	credProv := credentialsToProvider(creds)
+	credProv, err := asc.GetCredentialsProvider()
 	config := aws.Config{
 		Credentials: credProv,
 		Region:      region,
@@ -100,17 +99,6 @@ func New(
 		asc:    asc,
 		ps:     ps,
 	}, nil
-}
-
-func credentialsToProvider(creds *aws.Credentials) aws.CredentialsProvider {
-	return credentials.StaticCredentialsProvider{
-		Value: aws.Credentials{
-			AccessKeyID:     creds.AccessKeyID,
-			SecretAccessKey: creds.SecretAccessKey,
-			SessionToken:    creds.SessionToken,
-			Source:          creds.Source,
-		},
-	}
 }
 
 func (a *awsKmsSecrets) String() string {

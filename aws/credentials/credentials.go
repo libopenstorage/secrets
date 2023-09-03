@@ -14,6 +14,7 @@ import (
 
 type AWSCredentials interface {
 	Get() (*aws.Credentials, error)
+	GetCredentialsProvider() (aws.CredentialsProvider, error)
 }
 
 type awsCred struct {
@@ -67,4 +68,8 @@ func (a *awsCred) Get() (*aws.Credentials, error) {
 		}
 	}
 	return a.creds, nil
+}
+
+func (a *awsCred) GetCredentialsProvider() (aws.CredentialsProvider, error) {
+	return a.credsprovider, nil
 }

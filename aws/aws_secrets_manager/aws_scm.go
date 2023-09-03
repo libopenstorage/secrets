@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 	"github.com/libopenstorage/secrets"
@@ -64,29 +63,17 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create aws credentials instance: %v", err)
 	}
-	creds, err := asc.Get()
+	_, err = asc.Get()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get credentials: %v", err)
 	}
-	credProv := CredentialsToProvider(creds)
+	credProv, err := asc.GetCredentialsProvider()
 	config := aws.Config{
 		Credentials: credProv,
 		Region:      region,
 	}
 
 	return NewFromAWSConfig(config)
-}
-
-// credentialsToProvider converts a aws.Credential object to a aws.CredentialProvider object
-func CredentialsToProvider(creds *aws.Credentials) aws.CredentialsProvider {
-	return credentials.StaticCredentialsProvider{
-		Value: aws.Credentials{
-			AccessKeyID:     creds.AccessKeyID,
-			SecretAccessKey: creds.SecretAccessKey,
-			SessionToken:    creds.SessionToken,
-			Source:          creds.Source,
-		},
-	}
 }
 
 // NewFromAWSConfig creates new instance of AWSSecretsMgr with provided AWS configuration (aws.Config).
