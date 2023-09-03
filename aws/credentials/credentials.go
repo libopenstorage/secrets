@@ -2,7 +2,6 @@ package credentials
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -18,47 +17,54 @@ type AWSCredentials interface {
 }
 
 type awsCred struct {
-	creds *aws.Credentials
+	creds         *aws.Credentials
+	credsprovider aws.CredentialsProvider
 }
 
 func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredentials, error) {
 	var creds aws.Credentials
+	var credsprovider aws.CredentialsProvider
+	var ctx context.Context
 	if id != "" && secret != "" {
-		provider := credentials.NewStaticCredentialsProvider(id, secret, token)
-		var err error
-		if creds, err = provider.Retrieve(context.TODO()); err != nil {
-			return nil, err
-		}
-	} else {
-		defaultCfg, err := config.LoadDefaultConfig(context.TODO())
+		cfg, err := config.LoadDefaultConfig(ctx, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(id, secret, token)))
 		if err != nil {
 			return nil, err
 		}
-		if runningOnEc2 {
-			defaultCfg.HTTPClient = http.NewBuildableClient().WithTimeout(10 * time.Second)
 
-			defaultProvider := config.WithCredentialsProvider(defaultCfg.Credentials)
-			ec2provider := config.WithCredentialsProvider(ec2rolecreds.New(func(o *ec2rolecreds.Options) {
-				o.Client = imds.NewFromConfig(defaultCfg)
-			}))
+		creds, err = cfg.Credentials.Retrieve(context.Background())
+		if err != nil {
+			return nil, err
+		}
 
-			cfg, err := config.LoadDefaultConfig(context.TODO(),
-				defaultProvider,
-				ec2provider,
-			)
-			if err != nil {
-				log.Fatal(err)
-			}
+	} else if runningOnEc2 {
 
-			creds, err = cfg.Credentials.Retrieve(context.Background())
-			if err != nil {
-				return nil, err
-			}
+		ec2Provider := ec2rolecreds.New(func(o *ec2rolecreds.Options) {
+			o.Client = imds.New(imds.Options{
+				HTTPClient: http.NewBuildableClient().WithTimeout(10 * time.Second),
+			})
+		})
+
+		cfg, err := config.LoadDefaultConfig(context.TODO(),
+			config.WithCredentialsProvider(ec2Provider),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		creds, err = cfg.Credentials.Retrieve(context.Background())
+		if err != nil {
+			return nil, err
 		}
 	}
-	return &awsCred{&creds}, nil
+	return &awsCred{&creds, credsprovider}, nil
 }
 
 func (a *awsCred) Get() (*aws.Credentials, error) {
+	if a.creds.Expired() {
+		// Refresh the credentials
+		if _, err := a.credsprovider.Retrieve(context.TODO()); err != nil {
+			return nil, err
+		}
+	}
 	return a.creds, nil
 }
