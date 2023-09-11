@@ -32,6 +32,8 @@ func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredenti
 			return nil, err
 		}
 	} else if sess.Config.Credentials != nil {
+		// sess config loads credential automatically from environment variable
+		// this is used to prioritize loading aws web identity token whenever it's specified.
 		creds = sess.Config.Credentials
 	} else {
 		providers := []credentials.Provider{
