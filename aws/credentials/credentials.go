@@ -1,13 +1,13 @@
 package credentials
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 )
@@ -22,7 +22,10 @@ type awsCred struct {
 
 func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredentials, error) {
 	var creds *credentials.Credentials
-	sess := session.Must(session.NewSession())
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("error crewating new aws credentials: %w", err)
+	}
 	if id != "" && secret != "" {
 		creds = credentials.NewStaticCredentials(id, secret, token)
 		if _, err := creds.Get(); err != nil {
@@ -44,7 +47,6 @@ func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredenti
 			providers = append(providers, ec2RoleProvider)
 		}
 		providers = append(providers, &credentials.SharedCredentialsProvider{})
-		providers = append(providers, &stscreds.WebIdentityRoleProvider{})
 		creds = credentials.NewChainCredentials(providers)
 		if _, err := creds.Get(); err != nil {
 			return nil, err
