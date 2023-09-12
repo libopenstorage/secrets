@@ -1,6 +1,7 @@
 package credentials
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -21,18 +22,25 @@ type awsCred struct {
 
 func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredentials, error) {
 	var creds *credentials.Credentials
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("error crewating new aws credentials: %w", err)
+	}
 	if id != "" && secret != "" {
 		creds = credentials.NewStaticCredentials(id, secret, token)
 		if _, err := creds.Get(); err != nil {
 			return nil, err
 		}
+	} else if sess.Config.Credentials != nil {
+		// sess config loads credential automatically from environment variable
+		// this is used to prioritize loading aws web identity token whenever it's specified.
+		creds = sess.Config.Credentials
 	} else {
 		providers := []credentials.Provider{
 			&credentials.EnvProvider{},
 		}
 		if runningOnEc2 {
 			client := http.Client{Timeout: time.Second * 10}
-			sess := session.Must(session.NewSession())
 			ec2RoleProvider := &ec2rolecreds.EC2RoleProvider{
 				Client: ec2metadata.New(sess, &aws.Config{
 					HTTPClient: &client,
