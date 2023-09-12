@@ -24,7 +24,7 @@ func NewAWSCredentials(id, secret, token string, runningOnEc2 bool) (AWSCredenti
 	var creds *credentials.Credentials
 	sess, err := session.NewSession()
 	if err != nil {
-		return nil, fmt.Errorf("error crewating new aws credentials: %w", err)
+		return nil, fmt.Errorf("error creating new aws credentials: %w", err)
 	}
 	if id != "" && secret != "" {
 		creds = credentials.NewStaticCredentials(id, secret, token)
