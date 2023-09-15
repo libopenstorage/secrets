@@ -108,10 +108,7 @@ func (a *awsSecretTest) TestListSecrets(t *testing.T) error {
 
 func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 	// Delete of a key that exists should succeed
-	keyContext := make(map[string]string)
-	keyContext[SecretRetentionPeriodInDaysKey] = "7"
-
-	err := a.s.DeleteSecret(a.secretIdWithData, keyContext)
+	err := a.s.DeleteSecret(a.secretIdWithData, nil)
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
 
 	// Add a delay to allow time for deletion to propagate
@@ -123,7 +120,7 @@ func (a *awsSecretTest) TestDeleteSecret(t *testing.T) error {
 	assert.Equal(t, version, secrets.NoVersion)
 
 	// Delete of a key that exists should succeed
-	err = a.s.DeleteSecret(a.secretIdWithoutData, keyContext)
+	err = a.s.DeleteSecret(a.secretIdWithoutData, nil)
 	assert.NoError(t, err, "Expected DeleteSecret to succeed")
 
 	// Add a delay to allow time for deletion to propagate
