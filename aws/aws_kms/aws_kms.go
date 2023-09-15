@@ -1,15 +1,16 @@
 package aws_kms
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/libopenstorage/secrets/aws/utils"
 	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/libopenstorage/secrets/aws/utils"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/libopenstorage/secrets"
 	sc "github.com/libopenstorage/secrets/aws/credentials"
 	"github.com/libopenstorage/secrets/pkg/store"
@@ -28,9 +29,8 @@ const (
 )
 
 type awsKmsSecrets struct {
-	client *kms.KMS
-	creds  *credentials.Credentials
-	sess   *session.Session
+	client *kms.Client
+	creds  *aws.Credentials
 	cmk    string
 	asc    sc.AWSCredentials
 	ps     store.PersistenceStore
@@ -84,15 +84,16 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get credentials: %v", err)
 	}
-	config := &aws.Config{
-		Credentials: creds,
-		Region:      &region,
+	credProv, err := asc.GetCredentialsProvider()
+	config := aws.Config{
+		Credentials: credProv,
+		Region:      region,
 	}
-	sess := session.New(config)
-	kmsClient := kms.New(sess)
+
+	kmsClient := kms.NewFromConfig(config)
+
 	return &awsKmsSecrets{
 		client: kmsClient,
-		sess:   sess,
 		creds:  creds,
 		cmk:    cmk,
 		asc:    asc,
@@ -139,10 +140,10 @@ func (a *awsKmsSecrets) GetSecret(
 		decodedCipherBlob = cipherBlob
 	}
 	input := &kms.DecryptInput{
-		EncryptionContext: getAWSKeyContext(keyContext),
+		EncryptionContext: keyContext,
 		CiphertextBlob:    decodedCipherBlob,
 	}
-	output, err := a.client.Decrypt(input)
+	output, err := a.client.Decrypt(context.TODO(), input)
 	if err != nil {
 		return nil, secrets.NoVersion, err
 	}
@@ -203,11 +204,11 @@ func (a *awsKmsSecrets) PutSecret(
 	keySpec := "AES_256"
 	input := &kms.GenerateDataKeyInput{
 		KeyId:             &a.cmk,
-		EncryptionContext: getAWSKeyContext(keyContext),
-		KeySpec:           &keySpec,
+		EncryptionContext: keyContext,
+		KeySpec:           types.DataKeySpec(keySpec),
 	}
 
-	output, err := a.client.GenerateDataKey(input)
+	output, err := a.client.GenerateDataKey(context.TODO(), input)
 	if err != nil {
 		return secrets.NoVersion, err
 	}
