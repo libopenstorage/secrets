@@ -10,10 +10,9 @@ require (
 	github.com/IBM/keyprotect-go-client v0.5.1
 	github.com/aws/aws-sdk-go v1.44.164
 	github.com/golang/mock v1.6.0
-	github.com/hashicorp/go-hclog v1.3.1
-	github.com/hashicorp/vault v1.12.2
-	github.com/hashicorp/vault/api v1.8.0
-	github.com/hashicorp/vault/api/auth/approle v0.1.0
+	github.com/hashicorp/vault/api v1.10.0
+	github.com/hashicorp/vault/api/auth/approle v0.5.0
+	github.com/hashicorp/vault/api/auth/kubernetes v0.5.0
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611
 	github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467
@@ -25,17 +24,28 @@ require (
 )
 
 require (
+	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect
-	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
+	github.com/go-test/deep v1.0.8 // indirect
+	github.com/golang-jwt/jwt/v4 v4.3.0 // indirect
+	github.com/google/uuid v1.3.0 // indirect
+	github.com/hashicorp/go-retryablehttp v0.7.1 // indirect
+	github.com/hashicorp/hcl v1.0.1-vault-5 // indirect
+	github.com/imdario/mergo v0.3.13 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
+	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/ginkgo/v2 v2.6.0 // indirect
 	github.com/onsi/gomega v1.24.1 // indirect
-	github.com/prometheus/client_golang v1.14.0 // indirect
-	go.uber.org/goleak v1.2.0 // indirect
-	golang.org/x/net v0.3.1-0.20221206200815-1e63c2f08a10 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	golang.org/x/oauth2 v0.0.0-20220524215830-622c5d57e401
 	golang.org/x/time v0.3.0 // indirect
+	google.golang.org/protobuf v1.28.1 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	k8s.io/api v0.26.0 // indirect
 	k8s.io/apimachinery v0.26.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
