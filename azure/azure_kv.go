@@ -21,6 +21,10 @@ const (
 	AzureClientID = "AZURE_CLIENT_ID"
 	// AzureClientSecret of service principal account
 	AzureClientSecret = "AZURE_CLIENT_SECRET"
+	// AzureClientCertPath is path of a client certificate of service principal account
+	AzureClientCertPath = "AZURE_CLIENT_CERT_PATH"
+	// AzureClientCertPassword is the password of the client certificate of service principal account
+	AzureClientCertPassword = "AZURE_CIENT_CERT_PASSWORD"
 	// AzureEnviornment to connect
 	AzureEnviornment = "AZURE_ENVIRONMENT"
 	// AzureVaultURI of azure key vault
@@ -34,14 +38,15 @@ const (
 )
 
 var (
-	ErrAzureTenantIDNotSet    = errors.New("AZURE_TENANT_ID not set.")
-	ErrAzureClientIDNotSet    = errors.New("AZURE_CLIENT_ID not set.")
-	ErrAzureSecretIDNotSet    = errors.New("AZURE_SECRET_ID not set.")
-	ErrAzureVaultURLNotSet    = errors.New("AZURE_VAULT_URL not set.")
-	ErrAzureEnvironmentNotset = errors.New("AZURE_ENVIRONMENT not set.")
-	ErrAzureConfigMissing     = errors.New("AzureConfig is not provided")
-	ErrAzureAuthentication    = errors.New("Azure authentication failed")
-	ErrInvalidSecretResp      = errors.New("Secret Data received from secrets provider is either empty/invalid")
+	ErrAzureTenantIDNotSet         = errors.New("AZURE_TENANT_ID not set.")
+	ErrAzureClientIDNotSet         = errors.New("AZURE_CLIENT_ID not set.")
+	ErrAzureSecretIDNotSet         = errors.New("AZURE_SECRET_ID not set.")
+	ErrAzureClientAuthMethodNotSet = errors.New("AZURE_SECRET_ID or AZURE_CLIENT_CERT_PATH not set.")
+	ErrAzureVaultURLNotSet         = errors.New("AZURE_VAULT_URL not set.")
+	ErrAzureEnvironmentNotset      = errors.New("AZURE_ENVIRONMENT not set.")
+	ErrAzureConfigMissing          = errors.New("AzureConfig is not provided")
+	ErrAzureAuthentication         = errors.New("Azure authentication failed")
+	ErrInvalidSecretResp           = errors.New("Secret Data received from secrets provider is either empty/invalid")
 )
 
 type azureSecrets struct {
@@ -61,10 +66,15 @@ func New(
 	if clientID == "" {
 		return nil, ErrAzureClientIDNotSet
 	}
+
 	secretID := getAzureKVParams(secretConfig, AzureClientSecret)
-	if secretID == "" {
-		return nil, ErrAzureSecretIDNotSet
+	clientCertPath := getAzureKVParams(secretConfig, AzureClientCertPath)
+
+	if secretID == "" && clientCertPath == "" {
+		return nil, ErrAzureClientAuthMethodNotSet
 	}
+	clientCertPassword := getAzureKVParams(secretConfig, AzureClientCertPassword)
+
 	envName := getAzureKVParams(secretConfig, AzureEnviornment)
 	if envName == "" {
 		// we set back to default AzurePublicCloud
@@ -75,7 +85,7 @@ func New(
 		return nil, ErrAzureVaultURLNotSet
 	}
 
-	client, err := getAzureVaultClient(clientID, secretID, tenantID, envName)
+	client, err := getAzureVaultClient(clientID, secretID, clientCertPath, clientCertPassword, tenantID, envName)
 	if err != nil {
 		return nil, err
 	}
