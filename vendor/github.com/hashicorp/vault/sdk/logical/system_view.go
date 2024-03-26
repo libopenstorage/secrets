@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package logical
 
 import (
@@ -83,9 +86,20 @@ type SystemView interface {
 	// PluginEnv returns Vault environment information used by plugins
 	PluginEnv(context.Context) (*PluginEnvironment, error)
 
+	// VaultVersion returns the version string for the currently running Vault.
+	VaultVersion(context.Context) (string, error)
+
 	// GeneratePasswordFromPolicy generates a password from the policy referenced.
 	// If the policy does not exist, this will return an error.
 	GeneratePasswordFromPolicy(ctx context.Context, policyName string) (password string, err error)
+
+	// ClusterID returns the replication ClusterID, for use with path-based
+	// write forwarding (WriteForwardedPaths). This value will be templated
+	// in for the {{cluterId}} sentinel.
+	ClusterID(ctx context.Context) (string, error)
+
+	// GenerateIdentityToken returns an identity token for the requesting plugin.
+	GenerateIdentityToken(ctx context.Context, req *pluginutil.IdentityTokenRequest) (*pluginutil.IdentityTokenResponse, error)
 }
 
 type PasswordPolicy interface {
@@ -93,29 +107,51 @@ type PasswordPolicy interface {
 	Generate(context.Context, io.Reader) (string, error)
 }
 
+type WellKnownSystemView interface {
+	// RequestWellKnownRedirect registers a redirect from .well-known/src
+	// to dest, where dest is a sub-path of the mount. An error
+	// is returned if that source path is already taken
+	RequestWellKnownRedirect(ctx context.Context, src, dest string) error
+
+	// DeregisterWellKnownRedirect unregisters a specific redirect. Returns
+	// true if that redirect source was found
+	DeregisterWellKnownRedirect(ctx context.Context, src string) bool
+}
+
 type ExtendedSystemView interface {
+	WellKnownSystemView
+
 	Auditor() Auditor
 	ForwardGenericRequest(context.Context, *Request) (*Response, error)
+
+	// APILockShouldBlockRequest returns whether a namespace for the requested
+	// mount is locked and should be blocked
+	APILockShouldBlockRequest() (bool, error)
+
+	// GetPinnedPluginVersion returns the pinned version for the given plugin, if any.
+	GetPinnedPluginVersion(ctx context.Context, pluginType consts.PluginType, pluginName string) (*pluginutil.PinnedVersion, error)
 }
 
 type PasswordGenerator func() (password string, err error)
 
 type StaticSystemView struct {
-	DefaultLeaseTTLVal  time.Duration
-	MaxLeaseTTLVal      time.Duration
-	SudoPrivilegeVal    bool
-	TaintedVal          bool
-	CachingDisabledVal  bool
-	Primary             bool
-	EnableMlock         bool
-	LocalMountVal       bool
-	ReplicationStateVal consts.ReplicationState
-	EntityVal           *Entity
-	GroupsVal           []*Group
-	Features            license.Features
-	VaultVersion        string
-	PluginEnvironment   *PluginEnvironment
-	PasswordPolicies    map[string]PasswordGenerator
+	DefaultLeaseTTLVal           time.Duration
+	MaxLeaseTTLVal               time.Duration
+	SudoPrivilegeVal             bool
+	TaintedVal                   bool
+	CachingDisabledVal           bool
+	Primary                      bool
+	EnableMlock                  bool
+	LocalMountVal                bool
+	ReplicationStateVal          consts.ReplicationState
+	EntityVal                    *Entity
+	GroupsVal                    []*Group
+	Features                     license.Features
+	PluginEnvironment            *PluginEnvironment
+	PasswordPolicies             map[string]PasswordGenerator
+	VersionString                string
+	ClusterUUID                  string
+	APILockShouldBlockRequestVal bool
 }
 
 type noopAuditor struct{}
@@ -204,6 +240,10 @@ func (d StaticSystemView) PluginEnv(_ context.Context) (*PluginEnvironment, erro
 	return d.PluginEnvironment, nil
 }
 
+func (d StaticSystemView) VaultVersion(_ context.Context) (string, error) {
+	return d.VersionString, nil
+}
+
 func (d StaticSystemView) GeneratePasswordFromPolicy(ctx context.Context, policyName string) (password string, err error) {
 	select {
 	case <-ctx.Done():
@@ -232,4 +272,16 @@ func (d *StaticSystemView) DeletePasswordPolicy(name string) (existed bool) {
 	_, existed = d.PasswordPolicies[name]
 	delete(d.PasswordPolicies, name)
 	return existed
+}
+
+func (d StaticSystemView) ClusterID(ctx context.Context) (string, error) {
+	return d.ClusterUUID, nil
+}
+
+func (d StaticSystemView) GenerateIdentityToken(_ context.Context, _ *pluginutil.IdentityTokenRequest) (*pluginutil.IdentityTokenResponse, error) {
+	return nil, errors.New("GenerateIdentityToken is not implemented in StaticSystemView")
+}
+
+func (d StaticSystemView) APILockShouldBlockRequest() (bool, error) {
+	return d.APILockShouldBlockRequestVal, nil
 }
