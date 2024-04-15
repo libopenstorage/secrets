@@ -91,7 +91,7 @@ func TestVaultK8sHappyPath(t *testing.T) {
 		"VAULT_AUTH_KUBERNETES_ROLE": "portworx",
 		"VAULT_AUTH_METHOD":          "kubernetes",
 		"VAULT_BACKEND_PATH":         "static_secrets/",
-		"VAULT_COOLDOWN_PERIOD":      "disabled",
+		"VAULT_COOLDOWN_PERIOD":      "0",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, v)
@@ -217,7 +217,7 @@ func TestVaultK8sDisabledCooldown(t *testing.T) {
 		"VAULT_AUTH_KUBERNETES_ROLE": "portworx",
 		"VAULT_AUTH_METHOD":          "kubernetes",
 		"VAULT_BACKEND_PATH":         "static_secrets/",
-		"VAULT_COOLDOWN_PERIOD":      "disabled",
+		"VAULT_COOLDOWN_PERIOD":      "0",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, v)

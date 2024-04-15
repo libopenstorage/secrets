@@ -1,7 +1,6 @@
 package vault
 
 import (
-	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -63,7 +62,6 @@ type vaultSecrets struct {
 var (
 	newVaultClient     = api.NewClient
 	isKvV2             = isKvBackendV2
-	errInCooldown      = errors.New("vault client is in cooldown")
 	confCooldownPeriod time.Duration
 )
 
@@ -138,19 +136,18 @@ func New(
 		}
 	}
 
+	confCooldownPeriod = defaultCooldownPeriod
 	if cd := utils.GetVaultParam(secretConfig, VaultCooldownPeriod); cd != "" {
-		confCooldownPeriod, err = time.ParseDuration(cd)
-		if err == nil && confCooldownPeriod > time.Minute {
-			logrus.Infof("cooldown period is set to %s via %s=%s", confCooldownPeriod, VaultCooldownPeriod, cd)
-		} else {
-			// let's turn OFF the cooldown, if one passed invalid value (or "disabled")
-			logrus.WithError(err).Warnf("cooldown period is invalid (%s=%s) -- cooldowns turned OFF", VaultCooldownPeriod, cd)
+		if cd == "0" {
+			logrus.Warnf("cooldown period is disabled via %s=%s", VaultCooldownPeriod, cd)
 			confCooldownPeriod = 0
+		} else if confCooldownPeriod, err = time.ParseDuration(cd); err == nil && confCooldownPeriod > time.Minute {
+			logrus.Infof("cooldown period is set to %s", confCooldownPeriod)
+		} else {
+			return nil, fmt.Errorf("invalid cooldown period: %s=%s", VaultCooldownPeriod, cd)
 		}
-	} else {
-		confCooldownPeriod = defaultCooldownPeriod
-		logrus.Infof("cooldown period is set to %s", confCooldownPeriod)
 	}
+	logrus.Infof("cooldown period is set to %s", confCooldownPeriod)
 
 	return &vaultSecrets{
 		endpoint:         config.Address,
@@ -284,7 +281,7 @@ func (v *vaultSecrets) ListSecrets() ([]string, error) {
 
 func (v *vaultSecrets) read(path keyPath) (*api.Secret, error) {
 	if v.isInCooldown() {
-		return nil, errInCooldown
+		return nil, utils.ErrInCooldown
 	}
 	if v.autoAuth {
 		v.lockClientToken.Lock()
@@ -307,7 +304,7 @@ func (v *vaultSecrets) read(path keyPath) (*api.Secret, error) {
 
 func (v *vaultSecrets) write(path keyPath, data map[string]interface{}) (*api.Secret, error) {
 	if v.isInCooldown() {
-		return nil, errInCooldown
+		return nil, utils.ErrInCooldown
 	}
 	if v.autoAuth {
 		v.lockClientToken.Lock()
@@ -330,7 +327,7 @@ func (v *vaultSecrets) write(path keyPath, data map[string]interface{}) (*api.Se
 
 func (v *vaultSecrets) delete(path keyPath) (*api.Secret, error) {
 	if v.isInCooldown() {
-		return nil, errInCooldown
+		return nil, utils.ErrInCooldown
 	}
 	if v.autoAuth {
 		v.lockClientToken.Lock()
@@ -394,7 +391,7 @@ func (v *vaultSecrets) renewTokenWithCooldown(namespace string) error {
 	if confCooldownPeriod <= 0 { // cooldown is disabled, return immediately
 		return v.renewToken(namespace)
 	} else if v.isInCooldown() {
-		return errInCooldown
+		return utils.ErrInCooldown
 	}
 
 	err := v.renewToken(namespace)
