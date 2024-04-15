@@ -3,6 +3,8 @@ package vault
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -24,7 +26,21 @@ var (
 	}
 )
 
+func setupK8sTests(t *testing.T) {
+	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); os.IsNotExist(err) {
+		tokFile := "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+		t.Logf("Creating dummy token file: %s", tokFile)
+
+		err := os.MkdirAll(path.Dir(tokFile), 0755)
+		require.NoError(t, err)
+		_, err = os.OpenFile(tokFile, os.O_RDONLY|os.O_CREATE, 0666) // "touch" the file
+		require.NoError(t, err)
+	}
+}
+
 func TestVaultK8sHappyPath(t *testing.T) {
+	setupK8sTests(t)
 	var (
 		mockReplies = []string{
 			"login", "mounts", // vault-client.New
@@ -94,6 +110,7 @@ func TestVaultK8sHappyPath(t *testing.T) {
 }
 
 func TestVaultCooldown(t *testing.T) {
+	setupK8sTests(t)
 	var (
 		mockReplies = []string{
 			"login", "mounts", // vault-client.New
@@ -174,6 +191,7 @@ func TestVaultCooldown(t *testing.T) {
 }
 
 func TestVaultK8sDisabledCooldown(t *testing.T) {
+	setupK8sTests(t)
 	var (
 		mockReplies = []string{
 			"login", "mounts", // vault-client.New
