@@ -27,6 +27,7 @@ var (
 )
 
 func setupK8sTests(t *testing.T) {
+	setup()
 	tokFile := "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	if _, err := os.Stat(tokFile); os.IsNotExist(err) {
 		if err := os.MkdirAll(path.Dir(tokFile), 0755); err != nil {
