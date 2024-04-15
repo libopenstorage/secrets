@@ -27,11 +27,9 @@ var (
 )
 
 func setupK8sTests(t *testing.T) {
-	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); os.IsNotExist(err) {
-		tokFile := "/var/run/secrets/kubernetes.io/serviceaccount/token"
-
+	tokFile := "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	if _, err := os.Stat(tokFile); os.IsNotExist(err) {
 		t.Logf("Creating dummy token file: %s", tokFile)
-
 		err := os.MkdirAll(path.Dir(tokFile), 0755)
 		require.NoError(t, err)
 		_, err = os.OpenFile(tokFile, os.O_RDONLY|os.O_CREATE, 0666) // "touch" the file
