@@ -53,6 +53,7 @@ var (
 
 	ErrAuthMethodUnknown = errors.New("unknown auth method")
 	ErrKubernetesRole    = errors.New(AuthKubernetesRole + " not set")
+	ErrInCooldown        = errors.New("vault client is in cooldown")
 )
 
 // IsValidAddr checks address has the correct format.
