@@ -98,10 +98,10 @@ func TestVaultK8sHappyPath(t *testing.T) {
 
 	// quick put/get test
 
-	_, err = v.PutSecret("portworx/sikret", dummySecret, nil)
+	err = v.PutSecret("portworx/sikret", dummySecret, nil)
 	assert.NoError(t, err)
 
-	m, _, err = v.GetSecret("portworx/sikret", nil)
+	m, err = v.GetSecret("portworx/sikret", nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, m)
 
@@ -142,37 +142,37 @@ func TestVaultCooldown(t *testing.T) {
 	assert.Equal(t, defaultCooldownPeriod, confCooldownPeriod)
 	confCooldownPeriod = 100 * time.Millisecond // force-override for testing
 
-	_, err = v.PutSecret("portworx/sikret", dummySecret, nil)
+	err = v.PutSecret("portworx/sikret", dummySecret, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "permission denied")
 	assert.Equal(t, 4, cnt) // expect 4 calls to Vault: 2 for New(), 1 Put and 1 RenewToken
 
 	for i := 0; i < 10; i++ {
-		_, err = v.PutSecret("portworx/sikret", dummySecret, nil)
+		err = v.PutSecret("portworx/sikret", dummySecret, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "vault client is in cooldown")
 	}
 	assert.Equal(t, 4, cnt) // expect no extra calls to Vault since cooldown in effect
 
 	time.Sleep(confCooldownPeriod + 50*time.Millisecond)
-	_, err = v.PutSecret("portworx/sikret", dummySecret, nil)
+	err = v.PutSecret("portworx/sikret", dummySecret, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 5, cnt) // +1 call to Vault
 
 	// now let's do Get
-	m, _, err = v.GetSecret("portworx/sikret", nil)
+	m, err = v.GetSecret("portworx/sikret", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "permission denied")
 	assert.Empty(t, m)
 	assert.Equal(t, 7, cnt) // +1 Get and +1 RenewToken
 
 	for i := 0; i < 20; i++ {
-		m, _, err = v.GetSecret("portworx/sikret", nil)
+		m, err = v.GetSecret("portworx/sikret", nil)
 		require.Error(t, err)
 		assert.Empty(t, m)
 		assert.Contains(t, err.Error(), "vault client is in cooldown")
 
-		_, err = v.PutSecret("portworx/sikret", dummySecret, nil)
+		err = v.PutSecret("portworx/sikret", dummySecret, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "vault client is in cooldown")
 
@@ -183,7 +183,7 @@ func TestVaultCooldown(t *testing.T) {
 	assert.Equal(t, 7, cnt) // expect no extra calls to Vault since cooldown in effect
 
 	time.Sleep(confCooldownPeriod + 50*time.Millisecond)
-	m, _, err = v.GetSecret("portworx/sikret", nil)
+	m, err = v.GetSecret("portworx/sikret", nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 8, cnt) // +1 call to Vault
 	assert.NotEmpty(t, m)
@@ -223,22 +223,22 @@ func TestVaultK8sDisabledCooldown(t *testing.T) {
 	assert.Equal(t, time.Duration(0), confCooldownPeriod)
 	assert.Equal(t, 2, cnt)
 
-	_, err = v.PutSecret("portworx/sikret", dummySecret, nil)
+	err = v.PutSecret("portworx/sikret", dummySecret, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "permission denied")
 	assert.Equal(t, 4, cnt)
 
-	_, err = v.PutSecret("portworx/sikret", dummySecret, nil)
+	err = v.PutSecret("portworx/sikret", dummySecret, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 7, cnt)
 
-	m, _, err = v.GetSecret("portworx/sikret", nil)
+	m, err = v.GetSecret("portworx/sikret", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "permission denied")
 	assert.Empty(t, m)
 	assert.Equal(t, 9, cnt)
 
-	m, _, err = v.GetSecret("portworx/sikret", nil)
+	m, err = v.GetSecret("portworx/sikret", nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, m)
 

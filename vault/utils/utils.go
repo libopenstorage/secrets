@@ -142,9 +142,9 @@ func GetAuthToken(client *api.Client, config map[string]interface{}) (string, er
 	var err error
 	switch method {
 	case AuthMethodKubernetes:
-		path, _, data, err := authenticate(client, config)
-		if err != nil {
-			return "", err
+		path, _, data, err2 := authenticate(client, config)
+		if err2 != nil {
+			return "", err2
 		}
 		secret, err = client.Logical().Write(path, data)
 
