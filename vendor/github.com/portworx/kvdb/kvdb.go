@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	_ "github.com/golang/mock/mockgen/model"
 	"github.com/sirupsen/logrus"
 )
 
@@ -257,6 +258,8 @@ type Tx interface {
 }
 
 // Kvdb interface implemented by backing datastores.
+//
+//go:generate mockgen -package=mock -destination=mock/mock_kvdb.go . Kvdb
 type Kvdb interface {
 	Controller
 	// String representation of backend datastore.
@@ -315,12 +318,12 @@ type Kvdb interface {
 	Snapshot(prefixes []string, consistent bool) (Kvdb, uint64, error)
 	// SnapPut records the key value pair including the index.
 	SnapPut(kvp *KVPair) (*KVPair, error)
-	// Lock specfied key and associate a lockerID with it, probably to identify
+	// LockWithID locks the specified key and associates a lockerID with it, probably to identify
 	// who acquired the lock. The KVPair returned should be used to unlock.
 	LockWithID(key string, lockerID string) (*KVPair, error)
-	// Lock specfied key. The KVPair returned should be used to unlock.
+	// Lock locks the specified key. The KVPair returned should be used to unlock.
 	Lock(key string) (*KVPair, error)
-	// Lock with specified key and associate a lockerID with it.
+	// LockWithTimeout locks with specified key and associates a lockerID with it.
 	// lockTryDuration is the maximum time that can be spent trying to acquire
 	// lock, else return error.
 	// lockHoldDuration is the maximum time the lock can be held, after which
@@ -328,6 +331,8 @@ type Kvdb interface {
 	// The KVPair returned should be used to unlock if successful.
 	LockWithTimeout(key string, lockerID string, lockTryDuration time.Duration,
 		lockHoldDuration time.Duration) (*KVPair, error)
+	// IsKeyLocked returns a boolean if the lock is held or not. If held, returns the owner.
+	IsKeyLocked(key string) (bool, string, error)
 	// Unlock kvp previously acquired through a call to lock.
 	Unlock(kvp *KVPair) error
 	// TxNew returns a new Tx coordinator object or ErrNotSupported
@@ -342,14 +347,18 @@ type Kvdb interface {
 	RevokeUsersAccess(username string, permType PermissionType, subtree string) error
 	// SetFatalCb sets the function to be called in case of fatal errors
 	SetFatalCb(f FatalErrorCB)
-	// SetLockTimeout sets maximum time a lock may be held
-	SetLockTimeout(timeout time.Duration)
-	// GetLockTimeout gets the currently set lock timeout
-	GetLockTimeout() time.Duration
+	// SetLockHoldDuration sets maximum time a lock may be held
+	SetLockHoldDuration(timeout time.Duration)
+	// GetLockTryDuration gets the maximum time to attempt to get a lock.
+	GetLockTryDuration() time.Duration
+	// GetLockHoldDuration gets the currently set lock hold timeout
+	GetLockHoldDuration() time.Duration
 	// Serialize serializes all the keys under the domain and returns a byte array
 	Serialize() ([]byte, error)
 	// Deserialize deserializes the given byte array into a list of kv pairs
 	Deserialize([]byte) (KVPairs, error)
+	// Compact removes the history before the specified index/revision to reduce the space and memory usage
+	Compact(index uint64) error
 	KvdbWrapper
 }
 
@@ -401,33 +410,54 @@ const (
 
 // MemberInfo represents a member of the kvdb cluster
 type MemberInfo struct {
-	PeerUrls   []string
+	// PeerUrls is this member's URL on which it talks to its peers
+	PeerUrls []string
+	// ClientUrls is this member's URL on which clients can reach this member.
 	ClientUrls []string
-	Leader     bool
-	DbSize     int64
-	IsHealthy  bool
-	ID         string
+	// Leader indicates if this member is the leader of this cluster.
+	Leader bool
+	// DbSize is the current DB size as seen by this member.
+	DbSize int64
+	// IsHealthy indicates the health of the member.
+	IsHealthy bool
+	// ID is the string representation of member's ID
+	ID string
+	// Name of the member. A member which has not started has an empty Name.
+	Name string
+	// HasStarted indicates if this member has successfully started kvdb.
+	HasStarted bool
+	// IsLearner indicates if this member is a learner (i.e. not yet promoted to a full voting member).
+	IsLearner bool
 }
 
 // Controller interface provides APIs to manage Kvdb Cluster and Kvdb Clients.
 type Controller interface {
-	// AddMember adds a new member to an existing kvdb cluster. Add should be
-	// called on a kvdb node where kvdb is already running. It should be
-	// followed by a Setup call on the actual node
-	// Returns: map of nodeID to peerUrls of all members in the initial cluster or error
+	// AddMember adds a new member to an existing kvdb cluster. Add API should be
+	// invoked on an existing kvdb node where kvdb is already running. It should be
+	// followed by a Setup call on the node which is being added.
+	// Returns: map of nodeID to peerUrls of all members in the initial cluster or error.
 	AddMember(nodeIP, nodePeerPort, nodeName string) (map[string][]string, error)
 
-	// RemoveMember removes a member from an existing kvdb cluster
+	// AddLearner is same as AddMember except that the new member is added as a learner.
+	// It is caller's responsibility to promote it to a full voting member.
+	AddLearner(nodeIP, nodePeerPort, nodeName string) (map[string][]string, error)
+
+	// RemoveMember removes a member based on its Name from an existing kvdb cluster.
 	// Returns: error if it fails to remove a member
 	RemoveMember(nodeName, nodeIP string) error
+
+	// RemoveMemberByID removes a member based on its ID from an existing kvdb cluster.
+	// Returns: error if it fails to remove a member
+	RemoveMemberByID(memberID uint64) error
 
 	// UpdateMember updates the IP for the given node in an existing kvdb cluster
 	// Returns: map of nodeID to peerUrls of all members from the existing cluster
 	UpdateMember(nodeIP, nodePeerPort, nodeName string) (map[string][]string, error)
 
-	// ListMembers enumerates the members of the kvdb cluster
-	// Returns: the nodeID  to memberInfo mappings of all the members
-	ListMembers() (map[string]*MemberInfo, error)
+	// ListMembers enumerates the members of the kvdb cluster. It includes both the
+	// started and unstarted members.
+	// Returns: the member's ID  to MemberInfo mappings for all the members
+	ListMembers() (map[uint64]*MemberInfo, error)
 
 	// SetEndpoints set the kvdb endpoints for the client
 	SetEndpoints(endpoints []string) error
