@@ -6,8 +6,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/keyvault/2016-10-01/keyvault"
 	"github.com/Azure/go-autorest/autorest/to"
+
+	"github.com/Azure/azure-sdk-for-go/services/keyvault/2016-10-01/keyvault"
 	"github.com/libopenstorage/secrets"
 	"github.com/portworx/sched-ops/task"
 )

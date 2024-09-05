@@ -53,6 +53,7 @@ var (
 
 	ErrAuthMethodUnknown = errors.New("unknown auth method")
 	ErrKubernetesRole    = errors.New(AuthKubernetesRole + " not set")
+	ErrInCooldown        = errors.New("vault client is in cooldown")
 )
 
 // IsValidAddr checks address has the correct format.
@@ -125,7 +126,7 @@ func Authenticate(client *api.Client, config map[string]interface{}) (token stri
 		return token, false, nil
 	}
 
-	// or try to use the kubernetes auth method
+	// or use other authentication method: kubernetes, approle
 	if GetVaultParam(config, AuthMethod) != "" {
 		token, err = GetAuthToken(client, config)
 		return token, true, err
@@ -141,9 +142,9 @@ func GetAuthToken(client *api.Client, config map[string]interface{}) (string, er
 	var err error
 	switch method {
 	case AuthMethodKubernetes:
-		path, _, data, err := authenticate(client, config)
-		if err != nil {
-			return "", err
+		path, _, data, err2 := authenticate(client, config)
+		if err2 != nil {
+			return "", err2
 		}
 		secret, err = client.Logical().Write(path, data)
 

@@ -3,12 +3,15 @@ package kvdb
 import (
 	"testing"
 
-	"github.com/libopenstorage/secrets"
+	"github.com/libopenstorage/secrets/test"
 	"github.com/portworx/kvdb"
-	"github.com/stretchr/testify/require"
+	e2 "github.com/portworx/kvdb/etcd/v2"
 )
 
 func TestAll(t *testing.T) {
-	_, err := kvdb.New("notfound", "pwx/", []string{"http://127.0.0.1:2379"}, nil, nil)
-	require.Equal(t, secrets.ErrNotSupported, err)
+	config := make(map[string]interface{})
+
+	kv, _ := kvdb.New(e2.Name, "pwx/", []string{"http://127.0.0.1:2379"}, nil, nil)
+	config[KvdbKey] = kv
+	test.Run(New, config, t)
 }

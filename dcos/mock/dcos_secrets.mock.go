@@ -5,10 +5,9 @@
 package mock
 
 import (
-	reflect "reflect"
-
 	gomock "github.com/golang/mock/gomock"
 	dcos_secrets "github.com/portworx/dcos-secrets"
+	reflect "reflect"
 )
 
 // MockDCOSSecrets is a mock of DCOSSecrets interface

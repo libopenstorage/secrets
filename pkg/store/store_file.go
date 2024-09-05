@@ -4,8 +4,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
-	"path"
-	"strings"
 
 	"github.com/libopenstorage/secrets"
 )
@@ -19,28 +17,27 @@ var (
 	ErrInvalidRequest = errors.New("Storing secret data is supported in Secrets only if provided with kvdb as persistence store.")
 )
 
-func NewFilePersistenceStore() *FilePersistenceStore {
-	return &FilePersistenceStore{
-		basepath: secrets.SecretPath,
-	}
+func NewFilePersistenceStore() PersistenceStore {
+	return &filePersistenceStore{}
 }
 
-type FilePersistenceStore struct{
-	basepath string
+type filePersistenceStore struct{}
+
+func (f *filePersistenceStore) GetPublic(secretId string) ([]byte, error) {
+	var path string
+
+	path = secrets.SecretPath + secretId
+	return ioutil.ReadFile(path)
 }
 
-func (f *FilePersistenceStore) GetPublic(secretId string) ([]byte, error) {
-	return ioutil.ReadFile(path.Join(f.basepath, normalizeID(secretId)))
-}
-
-func (f *FilePersistenceStore) GetSecretData(
+func (f *filePersistenceStore) GetSecretData(
 	secretId string,
 	plain []byte,
 ) (map[string]interface{}, error) {
 	return nil, ErrInvalidRequest
 }
 
-func (f *FilePersistenceStore) Set(
+func (f *filePersistenceStore) Set(
 	secretId string,
 	cipher []byte,
 	plain []byte,
@@ -51,11 +48,9 @@ func (f *FilePersistenceStore) Set(
 		return ErrInvalidRequest
 	}
 
-	spath := path.Join(f.basepath, normalizeID(secretId))
-	if err := os.MkdirAll(f.basepath, 0700); err != nil {
-		return err
-	}
-	file, err := os.Create(spath)
+	path := secrets.SecretPath + secretId
+	os.MkdirAll(secrets.SecretPath, 0700)
+	file, err := os.Create(path)
 	if err != nil {
 		return err
 	}
@@ -63,25 +58,25 @@ func (f *FilePersistenceStore) Set(
 	return err
 }
 
-func (f *FilePersistenceStore) Exists(secretId string) (bool, error) {
-	spath := path.Join(f.basepath, normalizeID(secretId))
-	if checkValidPath(spath) {
+func (f *filePersistenceStore) Exists(secretId string) (bool, error) {
+	path := secrets.SecretPath + secretId
+	if checkValidPath(path) {
 		return true, nil
 	}
 	return false, nil
 }
 
-func (f *FilePersistenceStore) Delete(secretId string) error {
-	spath := path.Join(f.basepath, normalizeID(secretId))
+func (f *filePersistenceStore) Delete(secretId string) error {
+	path := secrets.SecretPath + secretId
 	exists, _ := f.Exists(secretId)
 	if !exists {
 		return nil
 	}
-	return os.Remove(spath)
+	return os.Remove(path)
 }
 
-func (f *FilePersistenceStore) List() ([]string, error) {
-	files, err := ioutil.ReadDir(f.basepath)
+func (f *filePersistenceStore) List() ([]string, error) {
+	files, err := ioutil.ReadDir(secrets.SecretPath)
 	if err != nil {
 		return nil, err
 	}
@@ -92,14 +87,8 @@ func (f *FilePersistenceStore) List() ([]string, error) {
 	return secretIds, nil
 }
 
-func (f *FilePersistenceStore) Name() string {
+func (f *filePersistenceStore) Name() string {
 	return FilePersistenceStoreName
-}
-
-// SetBasePath is used to set a base directory for the FilePersistenceStore.
-// Should be used just for testing purposed as it's out of the PersistenceStore interface.
-func (f *FilePersistenceStore) SetBasePath(path string) {
-	f.basepath = path
 }
 
 func checkValidPath(path string) bool {
@@ -107,8 +96,5 @@ func checkValidPath(path string) bool {
 		return true
 	}
 	return false
-}
 
-func normalizeID(id string) string {
-	return strings.Replace(id, "/", "!", -1)
 }
