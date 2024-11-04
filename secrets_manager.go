@@ -9,6 +9,7 @@ var (
 	instance       Secrets
 	secretBackends = make(map[string]BackendInit)
 	lock           sync.RWMutex
+	multiInstance  = make(map[string]Secrets)
 )
 
 // Instance returns the instance set via SetInstance. nil if not set.
@@ -53,4 +54,23 @@ func Register(name string, bInit BackendInit) error {
 	}
 	secretBackends[name] = bInit
 	return nil
+}
+
+// SetInstance sets the multiInstance of the secrets backend.
+func SetMultipleInstance(secretname string, secretsInstance Secrets) error {
+	if secretsInstance != nil {
+		lock.Lock()
+		defer lock.Unlock()
+		multiInstance[secretname] = secretsInstance
+		return nil
+	}
+	return fmt.Errorf("Secrets instance cannot be nil")
+}
+
+// MultipleInstance returns the instance set via SetMultipleInstance. nil if not set.
+func MultipleInstance(secretname string) Secrets {
+	lock.RLock()
+	defer lock.RUnlock()
+	c := multiInstance[secretname]
+	return c
 }
