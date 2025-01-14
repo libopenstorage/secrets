@@ -104,6 +104,9 @@ func (a *awsKmsSecrets) String() string {
 	return Name
 }
 
+func(a *awsKmsSecrets) Health()error{
+	return secrets.ErrNotSupported
+}
 func (a *awsKmsSecrets) GetSecret(
 	secretId string,
 	keyContext map[string]string,

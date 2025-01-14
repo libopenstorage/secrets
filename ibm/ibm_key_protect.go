@@ -119,7 +119,9 @@ func New(
 func (i *ibmKPSecret) String() string {
 	return Name
 }
-
+func(i *ibmKPSecret) Health()error{
+	return secrets.ErrNotSupported
+}
 func (i *ibmKPSecret) GetSecret(
 	secretId string,
 	keyContext map[string]string,

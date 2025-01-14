@@ -83,7 +83,9 @@ func New(
 		ps:            ps,
 	}, nil
 }
-
+func(g *gcloudKmsSecrets) Health()error{
+	return secrets.ErrNotSupported
+}
 func (g *gcloudKmsSecrets) String() string {
 	return Name
 }

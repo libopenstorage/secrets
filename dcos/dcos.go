@@ -65,6 +65,9 @@ func newSecretsClient(
 	return api.NewClient(clientConfig)
 }
 
+func(v *dcosSecrets) Health()error{
+	return secrets.ErrNotSupported
+}
 func getClientConfig(secretConfig map[string]interface{}) api.Config {
 	config := api.NewDefaultConfig()
 

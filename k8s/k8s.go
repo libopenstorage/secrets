@@ -24,6 +24,9 @@ func (s *k8sSecrets) String() string {
 	return Name
 }
 
+func(s *k8sSecrets) Health()error{
+	return secrets.ErrNotSupported
+}
 func (s *k8sSecrets) GetSecret(
 	secretName string,
 	keyContext map[string]string,

@@ -136,6 +136,8 @@ type Secrets interface {
 
 	// ListSecrets returns a list of known secretIDs
 	ListSecrets() ([]string, error)
+	// Health checks the connectivity to the KMS
+	Health() error
 }
 
 type BackendInit func(

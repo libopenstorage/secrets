@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -163,6 +164,21 @@ func New(
 
 func (v *vaultSecrets) String() string {
 	return Name
+}
+func (v *vaultSecrets) Health() error {
+	status, err := v.client.Sys().Health()
+	if err != nil {
+		return err
+	}
+	if status.Initialized && status.Sealed {
+		errMsg := "vault is initialized but sealed"
+		return errors.New(errMsg)
+	}
+	if !status.Initialized {
+		errMsg := "vault is not initialized"
+		return errors.New(errMsg)
+	}
+	return nil
 }
 
 func (v *vaultSecrets) keyPath(secretID string, keyContext map[string]string) keyPath {

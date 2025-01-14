@@ -41,6 +41,9 @@ func (v *kvdbSecrets) String() string {
 	return Name
 }
 
+func(v *kvdbSecrets) Health()error{
+	return secrets.ErrNotSupported
+}
 func (v *kvdbSecrets) GetSecret(
 	secretId string,
 	keyContext map[string]string,

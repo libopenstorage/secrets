@@ -116,6 +116,19 @@ func (a *AWSSecretsMgr) GetSecret(
 	return a.get(secretID)
 }
 
+func (a *AWSSecretsMgr) Health()error{
+	val,_,err:= a.GetSecret("health-check-secret",nil)
+	if err != nil {
+		if err == secrets.ErrInvalidSecretId {
+			return nil
+		}
+		return secrets.ErrNotAuthenticated
+	}
+	if val != nil {
+		return nil
+	}
+	return secrets.ErrNotAuthenticated
+}
 func (a *AWSSecretsMgr) PutSecret(
 	secretID string,
 	secretData map[string]interface{},

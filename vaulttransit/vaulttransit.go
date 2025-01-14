@@ -139,6 +139,9 @@ func New(
 func (v *vaultSecrets) String() string {
 	return Name
 }
+func(v *vaultSecrets) Health()error{
+	return secrets.ErrNotSupported
+}
 
 func (v *vaultSecrets) GetSecret(
 	secretID string,

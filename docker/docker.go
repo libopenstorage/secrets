@@ -28,6 +28,9 @@ func New(
 func (v *dockerSecrets) String() string {
 	return Name
 }
+func(v *dockerSecrets) Health()error{
+	return secrets.ErrNotSupported
+}
 
 func (v *dockerSecrets) GetSecret(
 	secretId string,

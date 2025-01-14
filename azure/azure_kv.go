@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/keyvault/2016-10-01/keyvault"
@@ -86,6 +87,19 @@ func New(
 	}, nil
 }
 
+func (az *azureSecrets) Health()error{
+	val,_,err:= az.GetSecret("health-check-secret",nil)
+	if err != nil {
+		if strings.Contains(err.Error(), "SecretNotFound") {
+			return nil
+		}
+		return secrets.ErrNotAuthenticated
+	}
+	if val != nil {
+		return nil
+	}
+	return secrets.ErrNotAuthenticated
+}
 func (az *azureSecrets) GetSecret(
 	secretID string,
 	keyContext map[string]string,
