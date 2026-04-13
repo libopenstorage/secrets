@@ -1,13 +1,11 @@
 package infisical
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 
-	infisical "github.com/infisical/go-sdk"
 	"github.com/libopenstorage/secrets"
 	"github.com/libopenstorage/secrets/pkg/store"
 	"github.com/portworx/kvdb"
@@ -44,10 +42,8 @@ var (
 )
 
 type infisicalKms struct {
-	infisicalClient infisical.InfisicalClientInterface
-	kms             infisical.KmsInterface
-	kmsKeyID        string
-	ps              store.PersistenceStore
+	client kmsEncryptDecrypter
+	ps     store.PersistenceStore
 }
 
 func New(
@@ -78,12 +74,8 @@ func New(
 		return nil, ErrKMSKeyIDRequired
 	}
 
-	client := infisical.NewInfisicalClient(context.Background(), infisical.Config{
-		SiteUrl:          siteURL,
-		AutoTokenRefresh: true,
-	})
-
-	if _, err := client.Auth().UniversalAuthLogin(clientID, clientSecret); err != nil {
+	client := newKmsClient(siteURL, kmsKeyID, clientID, clientSecret)
+	if err := client.login(); err != nil {
 		return nil, fmt.Errorf("infisical-kms: authentication failed: %w", err)
 	}
 
@@ -93,10 +85,8 @@ func New(
 	}).Info("infisical-kms: authenticated successfully")
 
 	return &infisicalKms{
-		infisicalClient: client,
-		kms:             client.Kms(),
-		kmsKeyID:        kmsKeyID,
-		ps:              ps,
+		client: client,
+		ps:     ps,
 	}, nil
 }
 
@@ -125,10 +115,7 @@ func (k *infisicalKms) GetSecret(
 		return nil, secrets.NoVersion, err
 	}
 
-	plaintext, err := k.kms.DecryptData(infisical.KmsDecryptDataOptions{
-		KeyId:      k.kmsKeyID,
-		Ciphertext: string(ciphertextBytes),
-	})
+	plaintext, err := k.client.decrypt(string(ciphertextBytes))
 	if err != nil {
 		return nil, secrets.NoVersion, fmt.Errorf("infisical-kms: decryption failed: %w", err)
 	}
@@ -160,10 +147,7 @@ func (k *infisicalKms) PutSecret(
 		return secrets.NoVersion, fmt.Errorf("infisical-kms: failed to marshal secret data: %w", err)
 	}
 
-	ciphertext, err := k.kms.EncryptData(infisical.KmsEncryptDataOptions{
-		KeyId:     k.kmsKeyID,
-		Plaintext: string(jsonBytes),
-	})
+	ciphertext, err := k.client.encrypt(string(jsonBytes))
 	if err != nil {
 		return secrets.NoVersion, fmt.Errorf("infisical-kms: encryption failed: %w", err)
 	}

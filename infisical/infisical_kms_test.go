@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	infisical "github.com/infisical/go-sdk"
 	"github.com/libopenstorage/secrets"
 	"github.com/portworx/kvdb"
 	memkv "github.com/portworx/kvdb/mem"
@@ -62,30 +61,26 @@ func (f *fakePersistenceStore) List() ([]string, error) {
 	return ids, nil
 }
 
-type fakeKms struct {
-	encryptFn func(opts infisical.KmsEncryptDataOptions) (string, error)
-	decryptFn func(opts infisical.KmsDecryptDataOptions) (string, error)
+type fakeClient struct {
+	encryptFn func(plaintext string) (string, error)
+	decryptFn func(ciphertext string) (string, error)
 }
 
-func (f *fakeKms) EncryptData(opts infisical.KmsEncryptDataOptions) (string, error) {
-	return f.encryptFn(opts)
+func (f *fakeClient) encrypt(plaintext string) (string, error) {
+	return f.encryptFn(plaintext)
 }
 
-func (f *fakeKms) DecryptData(opts infisical.KmsDecryptDataOptions) (string, error) {
-	return f.decryptFn(opts)
+func (f *fakeClient) decrypt(ciphertext string) (string, error) {
+	return f.decryptFn(ciphertext)
 }
-
-func (f *fakeKms) Keys() infisical.KmsKeysInterface      { return nil }
-func (f *fakeKms) Signing() infisical.KmsSigningInterface { return nil }
 
 func newTestBackend(
-	enc func(infisical.KmsEncryptDataOptions) (string, error),
-	dec func(infisical.KmsDecryptDataOptions) (string, error),
+	enc func(string) (string, error),
+	dec func(string) (string, error),
 ) *infisicalKms {
 	return &infisicalKms{
-		kms:      &fakeKms{encryptFn: enc, decryptFn: dec},
-		kmsKeyID: "test-key-id",
-		ps:       newFakePersistenceStore(),
+		client: &fakeClient{encryptFn: enc, decryptFn: dec},
+		ps:     newFakePersistenceStore(),
 	}
 }
 
@@ -155,8 +150,7 @@ func TestNew_MissingKMSKeyID(t *testing.T) {
 
 func TestPutSecret_HappyPath(t *testing.T) {
 	k := newTestBackend(
-		func(opts infisical.KmsEncryptDataOptions) (string, error) {
-			assert.Equal(t, "test-key-id", opts.KeyId)
+		func(plaintext string) (string, error) {
 			return "encrypted-blob", nil
 		},
 		nil,
@@ -186,7 +180,7 @@ func TestPutSecret_EmptyPlainText(t *testing.T) {
 func TestPutSecret_EncryptError(t *testing.T) {
 	encErr := errors.New("kms unavailable")
 	k := newTestBackend(
-		func(_ infisical.KmsEncryptDataOptions) (string, error) { return "", encErr },
+		func(_ string) (string, error) { return "", encErr },
 		nil,
 	)
 	_, err := k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, nil)
@@ -196,7 +190,7 @@ func TestPutSecret_EncryptError(t *testing.T) {
 
 func TestPutSecret_DuplicateWithoutOverride(t *testing.T) {
 	k := newTestBackend(
-		func(_ infisical.KmsEncryptDataOptions) (string, error) { return "blob", nil },
+		func(_ string) (string, error) { return "blob", nil },
 		nil,
 	)
 	_, err := k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, nil)
@@ -208,7 +202,7 @@ func TestPutSecret_DuplicateWithoutOverride(t *testing.T) {
 
 func TestPutSecret_OverwriteWithOverride(t *testing.T) {
 	k := newTestBackend(
-		func(_ infisical.KmsEncryptDataOptions) (string, error) { return "new-blob", nil },
+		func(_ string) (string, error) { return "new-blob", nil },
 		nil,
 	)
 	_ = k.ps.Set("my-secret", []byte("old-blob"), nil, nil, false)
@@ -227,9 +221,9 @@ func TestPutSecret_OverwriteWithOverride(t *testing.T) {
 
 func TestGetSecret_HappyPath(t *testing.T) {
 	k := newTestBackend(
-		func(_ infisical.KmsEncryptDataOptions) (string, error) { return "ct", nil },
-		func(opts infisical.KmsDecryptDataOptions) (string, error) {
-			assert.Equal(t, "ct", opts.Ciphertext)
+		func(_ string) (string, error) { return "ct", nil },
+		func(ciphertext string) (string, error) {
+			assert.Equal(t, "ct", ciphertext)
 			return `{"password":"hunter2"}`, nil
 		},
 	)
@@ -257,8 +251,8 @@ func TestGetSecret_NotFound(t *testing.T) {
 func TestGetSecret_DecryptError(t *testing.T) {
 	decErr := errors.New("kms unavailable")
 	k := newTestBackend(
-		func(_ infisical.KmsEncryptDataOptions) (string, error) { return "ct", nil },
-		func(_ infisical.KmsDecryptDataOptions) (string, error) { return "", decErr },
+		func(_ string) (string, error) { return "ct", nil },
+		func(_ string) (string, error) { return "", decErr },
 	)
 	_, _ = k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, nil)
 
@@ -275,11 +269,11 @@ func TestGetSecret_RoundTrip(t *testing.T) {
 
 	var capturedPlaintext string
 	k := newTestBackend(
-		func(opts infisical.KmsEncryptDataOptions) (string, error) {
-			capturedPlaintext = opts.Plaintext
+		func(plaintext string) (string, error) {
+			capturedPlaintext = plaintext
 			return "ct", nil
 		},
-		func(_ infisical.KmsDecryptDataOptions) (string, error) {
+		func(_ string) (string, error) {
 			return capturedPlaintext, nil
 		},
 	)
@@ -298,7 +292,7 @@ func TestGetSecret_RoundTrip(t *testing.T) {
 
 func TestDeleteSecret_HappyPath(t *testing.T) {
 	k := newTestBackend(
-		func(_ infisical.KmsEncryptDataOptions) (string, error) { return "ct", nil },
+		func(_ string) (string, error) { return "ct", nil },
 		nil,
 	)
 	_, _ = k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, nil)
@@ -328,7 +322,7 @@ func TestDeleteSecret_Idempotent(t *testing.T) {
 
 func TestListSecrets(t *testing.T) {
 	k := newTestBackend(
-		func(_ infisical.KmsEncryptDataOptions) (string, error) { return "ct", nil },
+		func(_ string) (string, error) { return "ct", nil },
 		nil,
 	)
 	_, _ = k.PutSecret("secret-a", map[string]interface{}{"x": "y"}, nil)
