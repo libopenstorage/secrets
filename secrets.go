@@ -53,6 +53,7 @@ const (
 	TypeVault             = "vault"
 	TypeVaultTransit      = "vault-transit"
 	TypeAWSSecretsManager = "aws-secrets-manager"
+	TypeInfisical         = "infisical-kms"
 )
 
 const (
