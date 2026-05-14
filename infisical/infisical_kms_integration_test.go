@@ -49,19 +49,21 @@ func TestIntegration_FullLifecycle(t *testing.T) {
 	s := newIntegrationBackend(t)
 	secretID := uniqueID(t, "lifecycle")
 
+	customCtx := map[string]string{secrets.CustomSecretData: "true"}
+
 	original := map[string]interface{}{
 		"passphrase": "super-secret-value",
 		"extra":      "metadata",
 	}
 
 	t.Run("PutSecret", func(t *testing.T) {
-		ver, err := s.PutSecret(secretID, original, nil)
+		ver, err := s.PutSecret(secretID, original, customCtx)
 		require.NoError(t, err)
 		assert.Equal(t, secrets.NoVersion, ver)
 	})
 
 	t.Run("GetSecret", func(t *testing.T) {
-		result, ver, err := s.GetSecret(secretID, nil)
+		result, ver, err := s.GetSecret(secretID, customCtx)
 		require.NoError(t, err)
 		assert.Equal(t, secrets.NoVersion, ver)
 		assert.Equal(t, original["passphrase"], result["passphrase"])
@@ -80,7 +82,7 @@ func TestIntegration_FullLifecycle(t *testing.T) {
 	})
 
 	t.Run("GetSecret_AfterDelete", func(t *testing.T) {
-		_, _, err := s.GetSecret(secretID, nil)
+		_, _, err := s.GetSecret(secretID, customCtx)
 		assert.ErrorIs(t, err, secrets.ErrInvalidSecretId)
 	})
 
@@ -93,6 +95,7 @@ func TestIntegration_FullLifecycle(t *testing.T) {
 
 func TestIntegration_MultipleSecrets(t *testing.T) {
 	s := newIntegrationBackend(t)
+	customCtx := map[string]string{secrets.CustomSecretData: "true"}
 
 	entries := []struct {
 		id   string
@@ -104,12 +107,12 @@ func TestIntegration_MultipleSecrets(t *testing.T) {
 	}
 
 	for _, e := range entries {
-		_, err := s.PutSecret(e.id, e.data, nil)
+		_, err := s.PutSecret(e.id, e.data, customCtx)
 		require.NoError(t, err)
 	}
 
 	for _, e := range entries {
-		result, _, err := s.GetSecret(e.id, nil)
+		result, _, err := s.GetSecret(e.id, customCtx)
 		require.NoError(t, err)
 		assert.Equal(t, e.data["vol"], result["vol"])
 	}
@@ -122,21 +125,41 @@ func TestIntegration_MultipleSecrets(t *testing.T) {
 func TestIntegration_Overwrite(t *testing.T) {
 	s := newIntegrationBackend(t)
 	id := uniqueID(t, "overwrite")
+	customCtx := map[string]string{secrets.CustomSecretData: "true"}
 
-	_, err := s.PutSecret(id, map[string]interface{}{"v": "original"}, nil)
+	_, err := s.PutSecret(id, map[string]interface{}{"v": "original"}, customCtx)
 	require.NoError(t, err)
 
-	_, err = s.PutSecret(id, map[string]interface{}{"v": "new"}, nil)
+	_, err = s.PutSecret(id, map[string]interface{}{"v": "new"}, customCtx)
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "already exists")
 
 	_, err = s.PutSecret(id, map[string]interface{}{"v": "updated"},
-		map[string]string{secrets.OverwriteSecretDataInStore: "true"})
+		map[string]string{
+			secrets.OverwriteSecretDataInStore: "true",
+			secrets.CustomSecretData:           "true",
+		})
 	require.NoError(t, err)
 
-	result, _, err := s.GetSecret(id, nil)
+	result, _, err := s.GetSecret(id, customCtx)
 	require.NoError(t, err)
 	assert.Equal(t, "updated", result["v"])
+
+	_ = s.DeleteSecret(id, nil)
+}
+
+func TestIntegration_PublicData(t *testing.T) {
+	s := newIntegrationBackend(t)
+	id := uniqueID(t, "publicdata")
+	publicCtx := map[string]string{secrets.PublicSecretData: "true"}
+
+	raw := []byte("opaque-bytes-stored-as-is")
+	_, err := s.PutSecret(id, map[string]interface{}{id: raw}, publicCtx)
+	require.NoError(t, err)
+
+	result, _, err := s.GetSecret(id, publicCtx)
+	require.NoError(t, err)
+	assert.Equal(t, raw, result[id])
 
 	_ = s.DeleteSecret(id, nil)
 }

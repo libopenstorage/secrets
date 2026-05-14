@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
 )
+
+var ErrInsecureSiteURL = errors.New("infisical-kms: INFISICAL_SITE_URL must use https://")
 
 const tokenExpiryBuffer = 5 * time.Second
 
@@ -31,8 +35,15 @@ type kmsClient struct {
 	expiresAt time.Time
 }
 
-func newKmsClient(siteURL, kmsKeyID, clientID, clientSecret string) *kmsClient {
+func newKmsClient(siteURL, kmsKeyID, clientID, clientSecret string) (*kmsClient, error) {
 	base := strings.TrimRight(siteURL, "/")
+	u, err := url.Parse(base)
+	if err != nil || u.Host == "" {
+		return nil, fmt.Errorf("infisical-kms: invalid INFISICAL_SITE_URL %q: %w", siteURL, err)
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return nil, ErrInsecureSiteURL
+	}
 	if !strings.HasSuffix(base, "/api") {
 		base += "/api"
 	}
@@ -42,7 +53,7 @@ func newKmsClient(siteURL, kmsKeyID, clientID, clientSecret string) *kmsClient {
 		kmsKeyID:     kmsKeyID,
 		clientID:     clientID,
 		clientSecret: clientSecret,
-	}
+	}, nil
 }
 
 type loginRequest struct {
@@ -112,9 +123,34 @@ func (c *kmsClient) doKmsRequest(path string, reqBody, respBody interface{}) err
 		return fmt.Errorf("infisical-kms: failed to marshal request: %w", err)
 	}
 
+	retried := false
+	for {
+		status, respBytes, err := c.sendKmsRequest(path, body)
+		if err != nil {
+			return err
+		}
+		if status == http.StatusOK {
+			if err := json.Unmarshal(respBytes, respBody); err != nil {
+				return fmt.Errorf("infisical-kms: failed to decode response: %w", err)
+			}
+			return nil
+		}
+
+		if !retried && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
+			retried = true
+			if err := c.login(); err != nil {
+				return fmt.Errorf("infisical-kms: re-authentication failed: %w", err)
+			}
+			continue
+		}
+		return fmt.Errorf("infisical-kms: request returned %d: %s", status, respBytes)
+	}
+}
+
+func (c *kmsClient) sendKmsRequest(path string, body []byte) (int, []byte, error) {
 	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("infisical-kms: failed to create request: %w", err)
+		return 0, nil, fmt.Errorf("infisical-kms: failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -124,19 +160,15 @@ func (c *kmsClient) doKmsRequest(path string, reqBody, respBody interface{}) err
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("infisical-kms: request failed: %w", err)
+		return 0, nil, fmt.Errorf("infisical-kms: request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		msg, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("infisical-kms: request returned %d: %s", resp.StatusCode, msg)
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("infisical-kms: failed to read response: %w", err)
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(respBody); err != nil {
-		return fmt.Errorf("infisical-kms: failed to decode response: %w", err)
-	}
-	return nil
+	return resp.StatusCode, respBytes, nil
 }
 
 type encryptRequest struct {

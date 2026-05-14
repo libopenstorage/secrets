@@ -134,6 +134,29 @@ func TestNew_MissingClientSecret(t *testing.T) {
 	assert.ErrorIs(t, err, ErrClientSecretRequired)
 }
 
+func TestNew_RejectsHTTPSiteURL(t *testing.T) {
+	_, err := New(map[string]interface{}{
+		KvdbKey:         newMemKvdb(t),
+		SiteURLKey:      "http://infisical.internal",
+		ClientIDKey:     "x",
+		ClientSecretKey: "x",
+		KMSKeyIDKey:     "x",
+	})
+	assert.ErrorIs(t, err, ErrInsecureSiteURL)
+}
+
+func TestNew_RejectsInvalidSiteURL(t *testing.T) {
+	_, err := New(map[string]interface{}{
+		KvdbKey:         newMemKvdb(t),
+		SiteURLKey:      "not a url",
+		ClientIDKey:     "x",
+		ClientSecretKey: "x",
+		KMSKeyIDKey:     "x",
+	})
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrClientIDRequired)
+}
+
 func TestNew_MissingKMSKeyID(t *testing.T) {
 	t.Setenv(KMSKeyIDKey, "")
 	_, err := New(map[string]interface{}{
@@ -148,6 +171,14 @@ func TestNew_MissingKMSKeyID(t *testing.T) {
 // PutSecret tests
 // ---------------------------------------------------------------------------
 
+func customCtx() map[string]string {
+	return map[string]string{secrets.CustomSecretData: "true"}
+}
+
+func publicCtx() map[string]string {
+	return map[string]string{secrets.PublicSecretData: "true"}
+}
+
 func TestPutSecret_HappyPath(t *testing.T) {
 	k := newTestBackend(
 		func(plaintext string) (string, error) {
@@ -156,7 +187,7 @@ func TestPutSecret_HappyPath(t *testing.T) {
 		nil,
 	)
 
-	ver, err := k.PutSecret("my-secret", map[string]interface{}{"password": "hunter2"}, nil)
+	ver, err := k.PutSecret("my-secret", map[string]interface{}{"password": "hunter2"}, customCtx())
 	require.NoError(t, err)
 	assert.Equal(t, secrets.NoVersion, ver)
 
@@ -167,14 +198,68 @@ func TestPutSecret_HappyPath(t *testing.T) {
 
 func TestPutSecret_EmptySecretId(t *testing.T) {
 	k := newTestBackend(nil, nil)
-	_, err := k.PutSecret("", map[string]interface{}{"x": "y"}, nil)
+	_, err := k.PutSecret("", map[string]interface{}{"x": "y"}, customCtx())
 	assert.ErrorIs(t, err, secrets.ErrEmptySecretId)
 }
 
-func TestPutSecret_EmptyPlainText(t *testing.T) {
+func TestPutSecret_NoFlagWithData(t *testing.T) {
 	k := newTestBackend(nil, nil)
-	_, err := k.PutSecret("my-secret", map[string]interface{}{}, nil)
-	assert.ErrorIs(t, err, secrets.ErrEmptySecretData)
+	_, err := k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, nil)
+	var kcErr *secrets.ErrInvalidKeyContext
+	assert.ErrorAs(t, err, &kcErr)
+}
+
+func TestPutSecret_CustomDataWithoutData(t *testing.T) {
+	k := newTestBackend(nil, nil)
+	_, err := k.PutSecret("my-secret", map[string]interface{}{}, customCtx())
+	var kcErr *secrets.ErrInvalidKeyContext
+	assert.ErrorAs(t, err, &kcErr)
+}
+
+func TestPutSecret_BothFlagsSet(t *testing.T) {
+	k := newTestBackend(nil, nil)
+	_, err := k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, map[string]string{
+		secrets.CustomSecretData: "true",
+		secrets.PublicSecretData: "true",
+	})
+	var kcErr *secrets.ErrInvalidKeyContext
+	assert.ErrorAs(t, err, &kcErr)
+}
+
+func TestPutSecret_PublicData(t *testing.T) {
+	encryptCalled := false
+	k := newTestBackend(
+		func(_ string) (string, error) {
+			encryptCalled = true
+			return "should-not-be-called", nil
+		},
+		nil,
+	)
+
+	raw := []byte("opaque-ciphertext-bytes")
+	_, err := k.PutSecret("my-secret",
+		map[string]interface{}{"my-secret": raw}, publicCtx())
+	require.NoError(t, err)
+	assert.False(t, encryptCalled, "PublicSecretData must not invoke encrypt")
+
+	stored, err := k.ps.GetPublic("my-secret")
+	require.NoError(t, err)
+	assert.Equal(t, raw, stored)
+}
+
+func TestPutSecret_PublicData_NotByteSlice(t *testing.T) {
+	k := newTestBackend(nil, nil)
+	_, err := k.PutSecret("my-secret",
+		map[string]interface{}{"my-secret": "a-string-not-bytes"}, publicCtx())
+	var kcErr *secrets.ErrInvalidKeyContext
+	assert.ErrorAs(t, err, &kcErr)
+}
+
+func TestPutSecret_PublicData_MissingSecretIdKey(t *testing.T) {
+	k := newTestBackend(nil, nil)
+	_, err := k.PutSecret("my-secret",
+		map[string]interface{}{"other-key": []byte("x")}, publicCtx())
+	assert.ErrorIs(t, err, secrets.ErrInvalidSecretData)
 }
 
 func TestPutSecret_EncryptError(t *testing.T) {
@@ -183,7 +268,7 @@ func TestPutSecret_EncryptError(t *testing.T) {
 		func(_ string) (string, error) { return "", encErr },
 		nil,
 	)
-	_, err := k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, nil)
+	_, err := k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, customCtx())
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "encryption failed")
 }
@@ -193,10 +278,10 @@ func TestPutSecret_DuplicateWithoutOverride(t *testing.T) {
 		func(_ string) (string, error) { return "blob", nil },
 		nil,
 	)
-	_, err := k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, nil)
+	_, err := k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, customCtx())
 	require.NoError(t, err)
 
-	_, err = k.PutSecret("my-secret", map[string]interface{}{"x": "z"}, nil)
+	_, err = k.PutSecret("my-secret", map[string]interface{}{"x": "z"}, customCtx())
 	assert.ErrorIs(t, err, secrets.ErrSecretExists)
 }
 
@@ -208,7 +293,10 @@ func TestPutSecret_OverwriteWithOverride(t *testing.T) {
 	_ = k.ps.Set("my-secret", []byte("old-blob"), nil, nil, false)
 
 	_, err := k.PutSecret("my-secret", map[string]interface{}{"x": "z"},
-		map[string]string{secrets.OverwriteSecretDataInStore: "true"})
+		map[string]string{
+			secrets.OverwriteSecretDataInStore: "true",
+			secrets.CustomSecretData:           "true",
+		})
 	require.NoError(t, err)
 
 	stored, _ := k.ps.GetPublic("my-secret")
@@ -228,9 +316,9 @@ func TestGetSecret_HappyPath(t *testing.T) {
 		},
 	)
 
-	_, _ = k.PutSecret("my-secret", map[string]interface{}{"password": "hunter2"}, nil)
+	_, _ = k.PutSecret("my-secret", map[string]interface{}{"password": "hunter2"}, customCtx())
 
-	result, ver, err := k.GetSecret("my-secret", nil)
+	result, ver, err := k.GetSecret("my-secret", customCtx())
 	require.NoError(t, err)
 	assert.Equal(t, secrets.NoVersion, ver)
 	assert.Equal(t, "hunter2", result["password"])
@@ -244,8 +332,49 @@ func TestGetSecret_EmptySecretId(t *testing.T) {
 
 func TestGetSecret_NotFound(t *testing.T) {
 	k := newTestBackend(nil, nil)
-	_, _, err := k.GetSecret("nonexistent", nil)
+	_, _, err := k.GetSecret("nonexistent", customCtx())
 	assert.ErrorIs(t, err, secrets.ErrInvalidSecretId)
+}
+
+func TestGetSecret_BothFlagsSet(t *testing.T) {
+	k := newTestBackend(nil, nil)
+	_, _, err := k.GetSecret("my-secret", map[string]string{
+		secrets.CustomSecretData: "true",
+		secrets.PublicSecretData: "true",
+	})
+	var kcErr *secrets.ErrInvalidKeyContext
+	assert.ErrorAs(t, err, &kcErr)
+}
+
+func TestGetSecret_NoFlag_ReturnsPlaintextString(t *testing.T) {
+	k := newTestBackend(
+		func(_ string) (string, error) { return "ct", nil },
+		func(_ string) (string, error) { return "the-plaintext", nil },
+	)
+	_, _ = k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, customCtx())
+
+	result, _, err := k.GetSecret("my-secret", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "the-plaintext", result["my-secret"])
+}
+
+func TestGetSecret_PublicData(t *testing.T) {
+	decryptCalled := false
+	k := newTestBackend(
+		nil,
+		func(_ string) (string, error) {
+			decryptCalled = true
+			return "", nil
+		},
+	)
+	raw := []byte("opaque-ciphertext-bytes")
+	_, err := k.PutSecret("my-secret", map[string]interface{}{"my-secret": raw}, publicCtx())
+	require.NoError(t, err)
+
+	result, _, err := k.GetSecret("my-secret", publicCtx())
+	require.NoError(t, err)
+	assert.False(t, decryptCalled, "PublicSecretData must not invoke decrypt")
+	assert.Equal(t, raw, result["my-secret"])
 }
 
 func TestGetSecret_DecryptError(t *testing.T) {
@@ -254,9 +383,9 @@ func TestGetSecret_DecryptError(t *testing.T) {
 		func(_ string) (string, error) { return "ct", nil },
 		func(_ string) (string, error) { return "", decErr },
 	)
-	_, _ = k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, nil)
+	_, _ = k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, customCtx())
 
-	_, _, err := k.GetSecret("my-secret", nil)
+	_, _, err := k.GetSecret("my-secret", customCtx())
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "decryption failed")
 }
@@ -278,10 +407,10 @@ func TestGetSecret_RoundTrip(t *testing.T) {
 		},
 	)
 
-	_, err := k.PutSecret("rtrip", original, nil)
+	_, err := k.PutSecret("rtrip", original, customCtx())
 	require.NoError(t, err)
 
-	result, _, err := k.GetSecret("rtrip", nil)
+	result, _, err := k.GetSecret("rtrip", customCtx())
 	require.NoError(t, err)
 	assert.Equal(t, original, result)
 }
@@ -295,7 +424,7 @@ func TestDeleteSecret_HappyPath(t *testing.T) {
 		func(_ string) (string, error) { return "ct", nil },
 		nil,
 	)
-	_, _ = k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, nil)
+	_, _ = k.PutSecret("my-secret", map[string]interface{}{"x": "y"}, customCtx())
 
 	err := k.DeleteSecret("my-secret", nil)
 	require.NoError(t, err)
@@ -325,8 +454,8 @@ func TestListSecrets(t *testing.T) {
 		func(_ string) (string, error) { return "ct", nil },
 		nil,
 	)
-	_, _ = k.PutSecret("secret-a", map[string]interface{}{"x": "y"}, nil)
-	_, _ = k.PutSecret("secret-b", map[string]interface{}{"x": "y"}, nil)
+	_, _ = k.PutSecret("secret-a", map[string]interface{}{"x": "y"}, customCtx())
+	_, _ = k.PutSecret("secret-b", map[string]interface{}{"x": "y"}, customCtx())
 
 	ids, err := k.ListSecrets()
 	require.NoError(t, err)

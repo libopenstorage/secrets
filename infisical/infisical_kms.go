@@ -74,15 +74,15 @@ func New(
 		return nil, ErrKMSKeyIDRequired
 	}
 
-	client := newKmsClient(siteURL, kmsKeyID, clientID, clientSecret)
+	client, err := newKmsClient(siteURL, kmsKeyID, clientID, clientSecret)
+	if err != nil {
+		return nil, err
+	}
 	if err := client.login(); err != nil {
 		return nil, fmt.Errorf("infisical-kms: authentication failed: %w", err)
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"site":     siteURL,
-		"kmsKeyID": kmsKeyID,
-	}).Info("infisical-kms: authenticated successfully")
+	logrus.WithField("site", siteURL).Info("infisical-kms: authenticated successfully")
 
 	return &infisicalKms{
 		client: client,
@@ -102,6 +102,14 @@ func (k *infisicalKms) GetSecret(
 		return nil, secrets.NoVersion, secrets.ErrEmptySecretId
 	}
 
+	_, customData := keyContext[secrets.CustomSecretData]
+	_, publicData := keyContext[secrets.PublicSecretData]
+	if customData && publicData {
+		return nil, secrets.NoVersion, &secrets.ErrInvalidKeyContext{
+			Reason: "both CustomSecretData and PublicSecretData flags cannot be set",
+		}
+	}
+
 	exists, err := k.ps.Exists(secretId)
 	if err != nil {
 		return nil, secrets.NoVersion, err
@@ -115,44 +123,71 @@ func (k *infisicalKms) GetSecret(
 		return nil, secrets.NoVersion, err
 	}
 
+	secretData := make(map[string]interface{})
+	if publicData {
+		secretData[secretId] = ciphertextBytes
+		return secretData, secrets.NoVersion, nil
+	}
+
 	plaintext, err := k.client.decrypt(string(ciphertextBytes))
 	if err != nil {
 		return nil, secrets.NoVersion, fmt.Errorf("infisical-kms: decryption failed: %w", err)
 	}
 
-	result := make(map[string]interface{})
-	if err := json.Unmarshal([]byte(plaintext), &result); err != nil {
-		return nil, secrets.NoVersion, fmt.Errorf("infisical-kms: failed to unmarshal decrypted data: %w", err)
+	if customData {
+		if err := json.Unmarshal([]byte(plaintext), &secretData); err != nil {
+			return nil, secrets.NoVersion, fmt.Errorf("infisical-kms: failed to unmarshal decrypted data: %w", err)
+		}
+	} else {
+		secretData[secretId] = plaintext
 	}
-
-	return result, secrets.NoVersion, nil
+	return secretData, secrets.NoVersion, nil
 }
 
 func (k *infisicalKms) PutSecret(
 	secretId string,
-	plainText map[string]interface{},
+	secretData map[string]interface{},
 	keyContext map[string]string,
 ) (secrets.Version, error) {
 	if secretId == "" {
 		return secrets.NoVersion, secrets.ErrEmptySecretId
 	}
-	if len(plainText) == 0 {
+
+	_, override := keyContext[secrets.OverwriteSecretDataInStore]
+	_, customData := keyContext[secrets.CustomSecretData]
+	_, publicData := keyContext[secrets.PublicSecretData]
+
+	if err := secrets.KeyContextChecks(keyContext, secretData); err != nil {
+		return secrets.NoVersion, err
+	}
+
+	var ciphertext []byte
+	if publicData && len(secretData) > 0 {
+		raw, ok := secretData[secretId]
+		if !ok {
+			return secrets.NoVersion, secrets.ErrInvalidSecretData
+		}
+		ciphertext, ok = raw.([]byte)
+		if !ok {
+			return secrets.NoVersion, &secrets.ErrInvalidKeyContext{
+				Reason: "secret data when PublicSecretData flag is set should be of the type []byte",
+			}
+		}
+	} else if customData && len(secretData) > 0 {
+		jsonBytes, err := json.Marshal(secretData)
+		if err != nil {
+			return secrets.NoVersion, fmt.Errorf("infisical-kms: failed to marshal secret data: %w", err)
+		}
+		encrypted, err := k.client.encrypt(string(jsonBytes))
+		if err != nil {
+			return secrets.NoVersion, fmt.Errorf("infisical-kms: encryption failed: %w", err)
+		}
+		ciphertext = []byte(encrypted)
+	} else {
 		return secrets.NoVersion, secrets.ErrEmptySecretData
 	}
 
-	_, override := keyContext[secrets.OverwriteSecretDataInStore]
-
-	jsonBytes, err := json.Marshal(plainText)
-	if err != nil {
-		return secrets.NoVersion, fmt.Errorf("infisical-kms: failed to marshal secret data: %w", err)
-	}
-
-	ciphertext, err := k.client.encrypt(string(jsonBytes))
-	if err != nil {
-		return secrets.NoVersion, fmt.Errorf("infisical-kms: encryption failed: %w", err)
-	}
-
-	return secrets.NoVersion, k.ps.Set(secretId, []byte(ciphertext), nil, nil, override)
+	return secrets.NoVersion, k.ps.Set(secretId, ciphertext, nil, nil, override)
 }
 
 func (k *infisicalKms) DeleteSecret(
