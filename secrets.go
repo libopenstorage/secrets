@@ -23,6 +23,8 @@ var (
 	ErrInvalidSecretData = errors.New("Secret Data cannot be empty when CustomSecretData|PublicSecretData flag is set")
 	// ErrInvalidKvdbProvided is returned when an incorrect KVDB implementation is provided for persistence store.
 	ErrInvalidKvdbProvided = errors.New("Invalid kvdb provided. secret store works in conjuction with a kvdb")
+	// ErrSecretNotFound is returned when the secret is not found
+	ErrSecretNotFound = errors.New("Secret not found")
 )
 
 const (
